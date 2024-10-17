@@ -1,0 +1,6 @@
+.pytest*
+__pycache__
+data/*
+.env
+script.py
+.venv
