@@ -1,4 +1,5 @@
 import requests
+import utils
 from etablissement import *
 
 # URLs des APIs
@@ -26,9 +27,6 @@ class Dossier:
 
 
 NumToDossierDict = dict[str, Dossier]
-NumToEtablissements = dict[str, list[Etablissment]]
-NumContactDict = dict[str, dict[str, str]]
-
 
 def _getDossiersList(headers):
     try:
@@ -87,7 +85,7 @@ def _getContactFromNum(numero, headers):
         print(f"Exception lors de la récupération des contacts: {e}")
         return None
 
-def getDossier(domain: str) -> NumToDossierDict:
+def getDossiers(domain: str) -> NumToDossierDict:
     silae_data = _getDossiersList(getDomainHeader(domain))
     dossiers = filtreDossiers(silae_data)
     dossierMap: NumToDossierDict = {}
@@ -100,7 +98,27 @@ def getDossier(domain: str) -> NumToDossierDict:
 
     return dossierMap
 
-def getInfosEtablissements(domain: str, dossiersMap: NumToDossierDict, contactMap: NumContactDict):
+def getInfosEtablissements(domain: str, dossiersMap: NumToDossierDict):
+    print(f"Export des informations d'etablissement de chaque dossier")
+    res:utils.NumToJson = {}
+    for numero, dossier in dossiersMap.items():
+        url = f"{api_E2RH}/dossiers/{numero}/etablissements"
+        try:
+            response = requests.get(url, headers=getDomainHeader(domain))
+            if response.status_code == 200:
+                etabJson = response.json().get("data")
+                res[numero] = etabJson
+            else:
+                print(
+                    f"Dossier : {dossier.numero} Erreur récupération établissement {response.text}"
+                )
+        except Exception as e:
+            print(f"getInfosEtablissements : exception raised {e}")
+    return res
+
+
+
+def getEtablissementExtrasInfos(domain: str, dossiersMap: NumToDossierDict):
     print(f"Export des informations d'etablissement de chaque dossier")
     for numero, dossier in dossiersMap.items():
         url = f"{api_E2RH}/dossiers/{numero}/etablissements"
@@ -117,27 +135,4 @@ def getInfosEtablissements(domain: str, dossiersMap: NumToDossierDict, contactMa
                     f"Dossier : {dossier.numero} Erreur récupération établissement {str(response)}"
                 )
         except Exception as e:
-            print(f"getInfosEtablissements : exception raised {e}")
-
-
-
-def getEtablissementExtrasInfos(domain: str, dossiersMap: NumToDossierDict, contactMap: NumContactDict):
-    print(f"Export des informations d'etablissement de chaque dossier")
-    for numero, dossier in dossiersMap.items():
-        url = f"{api_E2RH}/dossiers/{numero}/etablissements"
-        try:
-            response = requests.get(url, headers=getDomainHeader(domain))
-            if response.status_code == 200:
-                etabJson = response.json().get("data")
-                print(
-                    f"Dossier : {dossier.numero}, {len(etabJson)} etablissements récupérés"
-                )
-                contact = contactMap[numero]
-                NumToEtablissements[numero] = Etablissment(None, etabJson.get("nomInterne"),contact.get("Raison sociale"),etabJson.get("etablissementPrincipal"),etabJson.get("siret"),Adresse(etabJson.get("adresse_postale"),"","",contact.get("Code postal"),contact.get("Ville"),"","","FR"),"","","",contact.get("Code NAF"),"",)
-                return etabJson
-            else:
-                print(
-                    f"Dossier : {dossier.numero} Erreur récupération établissement {str(response)}"
-                )
-        except Exception as e:
-            print(f"getInfosEtablissements : exception raised {e}")
+            print(f"{url} : exception raised {e}")

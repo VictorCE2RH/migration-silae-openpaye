@@ -2,24 +2,19 @@
 import dotenv
 import typer
 import json
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+from itertools import islice
 
 # files
-from OP_registre import OPDossier
+import utils
+from utils import JSON
 import silae
 import parser
 import extract
 import opapi
 
 app = typer.Typer()
-
-
-def saveJsonData(name: str, dataJson: any):
-    data_repo = ".\\data"
-    jsonFile = f"{data_repo}\\{name}.json"
-    with open(jsonFile, "w") as fp:
-        json.dump(dataJson, fp, indent=4)
 
 
 # Fonction générique pour charger l'API en fonction du type choisi
@@ -31,9 +26,10 @@ def load_api(domain: str, api_type: str):
 
 
 @app.command()
-def create(domain: str, api_type: str, fromJson: str):
+def create(domain: str, api_type: str, fromJson: str) -> str:
     """
     Créer des éléments dans l'API OpenPaye pour un type donné (dossiers, etablissements, etc.).
+    Renvois le json de l'objet créé si succès
     """
     api = load_api(domain, api_type)
     # Charger les données à partir du fichier ou d'un autre source
@@ -42,21 +38,30 @@ def create(domain: str, api_type: str, fromJson: str):
         typer.echo("Aucun fichier fourni")
         raise typer.Exit()
 
-    item = api.create(item)
+    response = api.create(item)
     if item:
         typer.echo(f"Element Ajouté dans OpenPaye")
-        return True
+        return response
     return None
 
+
 @app.command()
-def read(domain: str, api_type: str, item_id: str):
+def read(domain: str, api_type: str, item_ids: List[str]) -> Optional[str]: 
     """
-    Lire un élément spécifique par ID depuis l'API OpenPaye.
+    Lire un ou plusieurs éléments spécifique par ID depuis l'API OpenPaye.
     """
     api = load_api(domain, api_type)
-    item = api.get(item_id)
-    typer.echo(f"Élément récupéré : {item}")
-
+    itemList:List[str] = []
+    for item_id in item_ids:
+        item = api.read(item_id)
+        if not item:
+            typer.echo(f"Item {item_id} does not exist in the database")
+            raise typer.Abort(item_id)
+        itemList.append(item)
+        typer.echo(f"Lecture item : {utils.formatJson(item)}")
+    if len(itemList) == 0:
+        return None
+    return ','.join(itemList)
 
 @app.command()
 def update(domain: str, api_type: str, item_id: str, file: Optional[str] = None):
@@ -73,33 +78,41 @@ def update(domain: str, api_type: str, item_id: str, file: Optional[str] = None)
         raise typer.Exit()
 
     success = api.update(item_id, data)
-    saveJsonData(f"res_{domain}_{api_type}", data)
+    utils.saveJsonData(f"res_{domain}_{api_type}", data)
     if success:
-        typer.echo(f"Élément {item_id} mis à jour avec succès")
+        typer.echo(f"item id {item_id} mis à jour avec succès")
     else:
         typer.echo(f"Erreur lors de la mise à jour de {item_id}")
 
 
 @app.command()
-def delete(domain: str, api_type: str, item_id: str):
+def delete(domain: str, api_type: str, item_ids: List[str], askUser: bool=True):
     """
     Supprimer un élément par ID dans l'API OpenPaye.
     """
     api = load_api(domain, api_type)
-    success = api.delete(item_id)
-    if success:
+    typer.echo(f"Tentative de suppression d'item(s) {api_type} {item_ids} : ")
+    read(domain, api_type, item_ids)
+    if askUser == True:
+        answer = typer.prompt(
+            f"Confirmez la suppression de(s) item(s) ci-dessus : [O]ui/[N]on "
+        )
+    if answer.lower() != "o" and answer.lower() != "oui":
+        typer.echo("Annulation de la requête...")
+        return
+    for item_id in item_ids:
+        api.delete(item_id)
         typer.echo(f"Élément {item_id} supprimé avec succès")
-    else:
-        typer.echo(f"Erreur lors de la suppression de {item_id}")
 
 
 @app.command()
 def getList(domain: str, api_type: str):
     api = load_api(domain, api_type)
-    items = api.list()
-
-    saveJsonData(f"res_{domain}_{api_type}", items)
+    response = api.list()
+    items = json.loads(response)
+    utils.saveJsonData(f"res_{domain}_{api_type}", items)
     typer.echo(f"Éléments récupérés : {len(items)}")
+
 
 # Fonction utilitaire pour charger les données du fichier
 def load_data_from_file(file_path: str):
@@ -116,35 +129,53 @@ def load_data_from_file(file_path: str):
         typer.echo("Format de fichier non supporté")
         raise typer.Exit()
 
+
 @app.command()
 def exportSilae(domain: str, fakeit: bool = True, max: int = -1):
     typer.echo("Export des dossiers depuis Silae")
-    print("test Appel autres commandes : list")
-    dossiersMap = silae.getDossier(domain)
+    dossiersMap = silae.getDossiers(domain)
+    if max > 0:
+        i = 0
+        newDossiers: dict[str, any] = {}
+        for numero, dossier in dossiersMap.items():
+            i += 1
+            newDossiers[numero] = dossier
+            if max == i:
+                dossiersMap = newDossiers
+                break
     file = f"list-employeurs-{domain}.xlsx"
     contactMap = extract.excel_vers_dictionnaire_multi_colonnes(
-        file, 3, "Dossier", extract.contactsColonnes()
+        file,
+        ligneEntete=3,
+        colonne_cle="Dossier",
+        colonnes_valeurs=extract.contactsColonnes(),
     )
-    openpaye_dossiers = parser.parseDossiers(dossiersMap, contactMap, max)
+    op_dossiersList = parser.parseDossiers(dossiersMap, contactMap, max)
+    etabMap = silae.getInfosEtablissements(domain, dossiersMap)
+    # extraInfos = silae.getEtablissementsExtrasInfos(domain)
+    op_etabList = parser.parseEtablissements(domain, etabMap, contactMap)
+    utils.saveJsonData(opapi.__ETABLISSEMENTS__, op_dossiersList)
+
     if not fakeit:
-        codes = creerMultiples(domain, "Dossiers", openpaye_dossiers)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fileName = f"export_dossiers_{timestamp}"
-        if len(codes) > 0:
-            saveJsonData(fileName, codes)
+        dossiersCrees = creerMultiples(domain, opapi.__DOSSIERS__, op_dossiersList)
+        codeList = map(dossiersCrees.get, "id")
+        utils.saveLogAction(opapi.__DOSSIERS__, codeList)
+        codes_etab = creerMultiples(domain, opapi.__ETABLISSEMENTS__, op_etabList)
 
 
 def creerMultiples(
-    domain: str, item_type:str, items: list[dict[str, str]]
-) -> dict[str, list[str]]:
+    domain: str, item_type: str, items: list[dict[str, str]]
+) -> list[JSON]:
     print(f"Tentative d'ajout de {len(items)} Dossiers vers l'API openpaye")
-    successList: list[str] = []
+    successList: list[JSON] = []
     for item in items:
         try:
             jsonStr = json.dumps(item)
             print(jsonStr)
-            if create(domain, item_type, jsonStr):
-                successList.append(item.get("code"))
+            response = create(domain, item_type, jsonStr)
+            if response:
+                jsonResp = json.loads(response)
+                successList.append(jsonResp)
             else:
                 print(f"Dossier {item.get("code")}, erreur lors de l'import")
         except Exception as e:
@@ -152,18 +183,18 @@ def creerMultiples(
 
     return successList
 
-def deleteMultiples(domain: str, item_type:str, listIds: list[str]):
-    print(
-        f"Tentative de suppression de {len(listIds)} dossiers depuis l'API openpaye"
-    )
-    for id in listIds:
-        try:
-            if delete(domain, item_type, id):
-                print(f"Suppression {item_type} ({id}) sur {domain} Réussie")
-        except Exception as e:
-            print(f"DeleteDossiers : Exception Raised {e}")
+
+def deleteMultiples(domain: str, item_type: str, listIds: list[str]):
+    print(f"Tentative de suppression de {len(listIds)} dossiers depuis l'API openpaye")
+    try:
+        if delete(domain, item_type, [listIds], False):
+            print(f"Suppression {item_type} ({id}) sur {domain} Réussie")
+    except Exception as e:
+        print(f"DeleteDossiers : Exception Raised {e}")
+
 
 if __name__ == "__main__":
     print("================== Application Start Session ==================")
     dotenv.load_dotenv()
-    app()
+    res = app()
+    print(f"Fin de l'execution {res}")

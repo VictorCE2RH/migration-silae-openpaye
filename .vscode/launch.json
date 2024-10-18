@@ -5,53 +5,53 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "[typer] Fake exportsilae",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "exportsilae",
+                "E2RH",
+                "--max=5"
+            ]
+        },
+        {
             "name": "[typer] list E2RH Dossiers",
             "type": "debugpy",
             "request": "launch",
             "program": "./main.py",
             "console": "integratedTerminal",
             "args": [
-                "list",
+                "getlist",
                 "E2RH",
                 "dossiers"
             ]
         },
         {
-            "name": "Import Dossiers",
+            "name": "[typer] read E2RH multi Dossiers",
             "type": "debugpy",
             "request": "launch",
-            "program": "./script.py",
+            "program": "./main.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
             "args": [
-                "importdossiers",
-                "E2RH"
+                "read",
+                "E2RH",
+                "dossiers",
+                "25108",
+                "25109"
             ]
         },
         {
-            "name": "Import Dossiers (max=5)",
+            "name": "[typer] list E2RH Dossiers",
             "type": "debugpy",
             "request": "launch",
-            "program": "./script.py",
+            "program": "./main.py",
             "console": "integratedTerminal",
-            "justMyCode": true,
             "args": [
-                "importdossiers",
+                "getlist",
                 "E2RH",
-                "--max=5"
-            ]
-        },
-        {
-            "name": "Suppression dossier (test)",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "./script.py",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "args": [
-                "deletedossiers",
-                "E2RH",
-                "test-removedDossiers.json"
+                "dossiers"
             ]
         }
     ]

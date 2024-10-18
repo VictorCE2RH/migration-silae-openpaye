@@ -4,3 +4,4 @@ data/*
 .env
 script.py
 .venv
+DSN.xml

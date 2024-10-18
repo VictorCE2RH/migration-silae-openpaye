@@ -20,7 +20,6 @@ class RoleOP(Enum):
     DG = "13"
     President = "14"
 
-
 # Dictionnaire dynamique pour correspondre les textes aux rôles
 role_mapping = {
     "chef d'entreprise": RoleOP.ChefEntreprise,
