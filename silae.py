@@ -11,6 +11,15 @@ URL_DOSSIER = api_E2RH + "/dossiers"
 def getDomainHeader(domain: str):
     return {"domain": domain}
 
+def ping():
+    response = requests.get(f"{api_E2RH}/ping")
+    if response.status_code != 200:
+        print(f" Erreur ping serveur {api_E2RH} : {response.status_code} {response.text}")
+    else:
+        print("Connecté à l'API E2RH !")
+        return True
+    
+    return False
 
 class Dossier:
     numero: str
@@ -50,18 +59,20 @@ def _getDossiersList(headers):
 
 def filtreDossiers(dossiers):
     filteredList: list[Dossier] = []
+    i = 0
     for dossier in dossiers:
         if dossier.numero.startswith("99"):
-            print(f"Dossier retiré : {dossier.numero}")
+            i += 1
             continue
         filteredList.append(dossier)
+    print(f"{i} Dossier(s) retiré(s) (Prefix ='99')")
 
     return filteredList
 
 def _getContactFromNum(numero, headers):
     try:
         response = requests.get(
-            f"http://localhost:8080/dossiers/{numero}/collab", headers=headers
+            f"{api_E2RH}/dossiers/{numero}/collab", headers=headers
         )
         if response.status_code == 200:
             silae_data = response.json().get("data")
@@ -100,7 +111,7 @@ def getDossiers(domain: str) -> NumToDossierDict:
 
 def getInfosEtablissements(domain: str, dossiersMap: NumToDossierDict):
     print(f"Export des informations d'etablissement de chaque dossier")
-    res:utils.NumToJson = {}
+    res:dict = {}
     for numero, dossier in dossiersMap.items():
         url = f"{api_E2RH}/dossiers/{numero}/etablissements"
         try:
@@ -116,23 +127,88 @@ def getInfosEtablissements(domain: str, dossiersMap: NumToDossierDict):
             print(f"getInfosEtablissements : exception raised {e}")
     return res
 
-
-
-def getEtablissementExtrasInfos(domain: str, dossiersMap: NumToDossierDict):
+def getEtablissementDetails(domain: str, etabMap: dict):
     print(f"Export des informations d'etablissement de chaque dossier")
-    for numero, dossier in dossiersMap.items():
-        url = f"{api_E2RH}/dossiers/{numero}/etablissements"
-        try:
+    etabDetailsMap = dict()
+    for numero, etabs in etabMap.items():
+        for etab in etabs['informationsEtablissements']:
+            nomInterne = etab["nomInterne"]
+            url = f"{api_E2RH}/dossiers/{numero}/etablissements/{nomInterne}/details"
+            try:
+                response = requests.get(url, headers=getDomainHeader(domain))
+                if response.status_code == 200:
+                    etabJson = response.json().get("data")
+                    print(
+                        f"Dossier : {numero} Etablissement {nomInterne}, détails récupérés"
+                    )
+                    etabDetailsMap[nomInterne] = etabJson
+                else:
+                    print(
+                        f"Dossier : {numero} Etablissement {nomInterne}, Erreur récupération établissement {response.text}"
+                    )
+            except Exception as e:
+                print(f"{url} : exception raised {e}")
+
+    return etabDetailsMap
+
+def getInfosSalaries(domain: str, codeDict: dict):
+    res = dict()
+    print(f"Export des informations salariés pour chaque documents")
+    for numero, _ in codeDict.items():
+        url = f"{api_E2RH}/dossiers/{numero}/salaries"
+        try: 
             response = requests.get(url, headers=getDomainHeader(domain))
             if response.status_code == 200:
-                etabJson = response.json().get("data")
-                print(
-                    f"Dossier : {dossier.numero}, {len(etabJson)} etablissements récupérés"
-                )
-                return etabJson
-            else:
-                print(
-                    f"Dossier : {dossier.numero} Erreur récupération établissement {str(response)}"
-                )
+                respjson = response.json().get("data")
+                res[numero] = dict()
+                matricules = [matricule["matriculeSalarie"] for matricule in respjson["listeSalariesInformations"]]
+                print(matricules)
+                for mat in matricules:
+                    url = f"{api_E2RH}/dossiers/{numero}/salaries/{mat}/details"
+                    response = requests.get(url, headers=getDomainHeader(domain))
+                    if response.status_code == 200:
+                        respjson = response.json().get("data")
+                        res[numero][mat] = respjson
+                    else:
+                        print(response.text)
         except Exception as e:
-            print(f"{url} : exception raised {e}")
+            print(f"Exception levée : {e}")
+    return res
+
+def getInfosEmplois(domain:str,sal_detailsMap: dict):
+    res = dict()
+    print(f"Export des informations salariés pour chaque documents")
+    for numero, salaries in sal_detailsMap.items():
+        res[numero] = dict()
+        for matricule, _ in salaries.items():
+            url = f"{api_E2RH}/dossiers/{numero}/salaries/{matricule}/emplois"
+            try: 
+                response = requests.get(url, headers=getDomainHeader(domain))
+                if response.status_code == 200:
+                    respjson = response.json().get("data")
+                    res[numero][matricule] = respjson
+                else:
+                    print(response.text)
+
+            except Exception as e:
+                print(f"Exception levée : {e}")
+    return res
+
+def getCumulsContrats(domain:str,sal_detailsMap: dict):
+    res = dict()
+    print(f"Export des informations salariés pour chaque documents")
+    for numero, salaries in sal_detailsMap.items():
+        res[numero] = dict()
+        for matricule, _ in salaries.items():
+            url = f"{api_E2RH}/dossiers/{numero}/salaries/{matricule}/emplois"
+            try: 
+                response = requests.get(url, headers=getDomainHeader(domain))
+                if response.status_code == 200:
+                    respjson = response.json().get("data")
+                    res[numero][matricule] = respjson
+                else:
+                    print(response.text)
+
+            except Exception as e:
+                print(f"Exception levée : {e}")
+    return res

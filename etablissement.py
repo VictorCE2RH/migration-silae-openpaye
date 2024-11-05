@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+import json
 
 @dataclass
 class Adresse:
@@ -32,7 +33,6 @@ class GestionCongesPayes:
 
 @dataclass
 class Etablissment:
-    id: int | None  # Ignoré pour une création d'établissement
     code: str
     raison_sociale: str
     etablissement_principal: bool
@@ -55,12 +55,5 @@ class Etablissment:
     taux_at: float
     is_taux_versement_transport: bool
     taux_versement_transport: float
-    banque: Banque
+    banque: Banque 
     gestion_conges_payes: GestionCongesPayes
-
-
-@dataclass
-class Silae_Etablissement:
-    nomInterne: str
-    siret: str
-    principal: bool

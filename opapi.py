@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional
 api_openpaye = "https://api.openpaye.co"
 URL_DOSSIERS = api_openpaye + "/dossiers"
 
-
 # Pour chaque thème (Dossiers, Etablissements...), initialiser une API
 __ABSENCES__ = "absences"
 __BULLETINSPAIES__ = "bulletinspaies"
@@ -25,11 +24,9 @@ __SOLDETOUTCOMPTES__ = "soldetoutcomptes"
 __VARIABLES__ = "variables"
 __VARIABLESBULLETINS__ = "variablesbulletins"
 
-
 def openpaye_auth(domain: str):
     # username, password
     return env.getLogs(domain)
-
 
 class BaseAPI:
     BASE_URL = "https://api.openpaye.co"  # URL de base de ton API
@@ -41,12 +38,10 @@ class BaseAPI:
         self.headers = {"Content-Type": "application/json"}
         self.auth = auth_key
 
-    def create(self, data: Dict[str, Any]) -> Optional[str]:
+    def create(self, data:dict, params:dict=None) -> Optional[str]:
         url = f"{self.BASE_URL}/{self.resource}"
         if config.fakeCRUD == False:
-            response = requests.post(
-                url, auth=self.auth, json=data, headers=self.headers
-            )
+            response = requests.post(url, auth=self.auth, json=data, headers=self.headers,params=params)
         return self._handle_response(response)
 
     def read(self, item_id: str) -> Optional[str]:
@@ -54,12 +49,11 @@ class BaseAPI:
         response = requests.get(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[str]:
+    def update(self, item_id: str, data: dict) -> Optional[str]:
         url = f"{self.BASE_URL}/{self.resource}/{item_id}"
-        if config.fakeCRUD == False:
-            response = requests.put(
-                url, auth=self.auth, json=data, headers=self.headers
-            )
+        response = requests.put(
+            url, auth=self.auth, json=data, headers=self.headers
+        )
         return self._handle_response(response)
 
     def delete(self, item_id: str) -> Optional[str]:
@@ -80,7 +74,7 @@ class BaseAPI:
         if response.status_code in [200, 201]:
             return response.text
         else:
-            print(f"Error: {response.status_code} - {response.text}")
+            print(f"Error {response.url} response : {response.status_code} - {response.text}")
             return None
 
 
@@ -108,8 +102,8 @@ class DossiersEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__DOSSIERS__, auth_key)
 
-    def list(self):
-        print("liste de tous les dossier")
+    def list(self, params:dict=None):
+        print("liste de tous les dossiers")
         page = 0
         dossiers, total_pages, total_dossiers = self.getDossiersList(page)
         page += 1
@@ -141,12 +135,37 @@ class EditionsEP(BaseAPI):
 class EtablissementsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__ETABLISSEMENTS__, auth_key)
+    
+    def list(self, params:dict=None):
+        if params["dossierId"] == None:
+            raise Exception()
+        print(f"liste de tous les etablissements du etablissement {params["dossierId"]}")
+        page = 0
+        etablissements, total_pages, total_etablissements = self.getDossiersList(page)
+        page += 1
+        while page < total_pages:
+            nextPage, _, _ = self.getDossiersList(page)
+            etablissements += nextPage
+        if len(etablissements) != total_etablissements:
+            raise Exception(
+                f"[List Dossiers] Récupération erronée , etablissements récupérés  : {len(etablissements)} != etablissements stockés :{total_etablissements}"
+            )
+        return json.dumps(etablissements)
 
+    def getDossiersList(self, id, num:int) -> tuple[str,int,int]:
+        params = dict(("dossierId", id),("page", num))
+        etablissementsInfosStr = super().list(params)
+        if not etablissementsInfosStr:
+            return None
+        etablissementsInfos = json.loads(etablissementsInfosStr)
+        etablissements = etablissementsInfos.get("etablissements")
+        total_etablissements = int(etablissementsInfos.get("total_count"))
+        total_pages = int(etablissementsInfos.get("total_pages"))
+        return etablissements, total_pages, total_etablissements
 
 class HeuresSupplementairesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__HEURESSUPPLEMENTAIRES__, auth_key)
-
 
 class OptionsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):

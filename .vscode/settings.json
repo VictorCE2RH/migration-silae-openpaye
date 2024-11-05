@@ -3,7 +3,5 @@
         "."
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
-    "docwriter.style": "Auto-detect",
-    "docwriter.language": "Japanese"
+    "python.testing.pytestEnabled": true
 }

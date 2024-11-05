@@ -3,7 +3,7 @@ import opapi
 
 
 def dossierDelete(domain: str, file: str):
-    path = "C:\\Users\\e2rh0\\Victor_E2RH\\workspace\\open-paye-migration\\data\\"
+    path = "C:\\Users\\e2rh0\\Victor_E2RH\\workspace\\open-paye-migration\\data\\out\\"
     path = f"{path.strip()}\\{file}"
     with open(path, "r") as fp:
         jsonFile = json.load(fp)
