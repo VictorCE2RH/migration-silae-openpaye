@@ -1,3 +1,4 @@
+from datetime import datetime,date,timedelta
 import requests
 import utils
 from etablissement import *
@@ -34,9 +35,6 @@ class Dossier:
         except Exception as e:
             print(f"Dossier Creation from json not possible : {e}")
 
-
-NumToDossierDict = dict[str, Dossier]
-
 def _getDossiersList(headers):
     try:
         response = requests.get(URL_DOSSIER, headers=headers)
@@ -65,8 +63,6 @@ def filtreDossiers(dossiers):
             i += 1
             continue
         filteredList.append(dossier)
-    print(f"{i} Dossier(s) retiré(s) (Prefix ='99')")
-
     return filteredList
 
 def _getContactFromNum(numero, headers):
@@ -96,10 +92,10 @@ def _getContactFromNum(numero, headers):
         print(f"Exception lors de la récupération des contacts: {e}")
         return None
 
-def getDossiers(domain: str) -> NumToDossierDict:
+def getDossiers(domain: str) -> dict[str, Dossier]:
     silae_data = _getDossiersList(getDomainHeader(domain))
     dossiers = filtreDossiers(silae_data)
-    dossierMap: NumToDossierDict = {}
+    dossierMap: dict[str, Dossier] = {}
     if not dossiers:
         print("No folders Found (filtered)")
         exit(1)
@@ -109,7 +105,30 @@ def getDossiers(domain: str) -> NumToDossierDict:
 
     return dossierMap
 
-def getInfosEtablissements(domain: str, dossiersMap: NumToDossierDict):
+def getDossiersDetails(domain: str, dossiersMap:dict[str, Dossier]):
+    headers = getDomainHeader(domain)
+    res = {}
+    for numero, _ in dossiersMap.items():
+        try:
+            url = f"{api_E2RH}/dossiers/{numero}/details"
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                print("Données récupérées avec succès de l'API Silae.")
+                dossiersJson = response.json().get("data", [])
+                res[numero] = dossiersJson["reponsesInfosPaie"]
+            else:
+                respJson = response.json()
+                print(
+                    f"Erreur lors de la récupération des données: {respJson.get("errors")}"
+                )
+                return None
+        except Exception as e:
+            print(f"Exception lors de la récupération des données: {e.args[0]}")
+            return None
+    return res
+
+
+def getInfosEtablissements(domain: str, dossiersMap: dict[str, Dossier]):
     print(f"Export des informations d'etablissement de chaque dossier")
     res:dict = {}
     for numero, dossier in dossiersMap.items():
@@ -141,7 +160,7 @@ def getEtablissementDetails(domain: str, etabMap: dict):
                     print(
                         f"Dossier : {numero} Etablissement {nomInterne}, détails récupérés"
                     )
-                    etabDetailsMap[nomInterne] = etabJson
+                    etabDetailsMap[nomInterne] = etabJson["reponsesInfosPaie"]
                 else:
                     print(
                         f"Dossier : {numero} Etablissement {nomInterne}, Erreur récupération établissement {response.text}"
@@ -194,21 +213,28 @@ def getInfosEmplois(domain:str,sal_detailsMap: dict):
                 print(f"Exception levée : {e}")
     return res
 
-def getCumulsContrats(domain:str,sal_detailsMap: dict):
-    res = dict()
+def getCumulsContrats(domain:str,codeDict: dict):
+    res:dict[str,str] = {}
     print(f"Export des informations salariés pour chaque documents")
-    for numero, salaries in sal_detailsMap.items():
-        res[numero] = dict()
-        for matricule, _ in salaries.items():
-            url = f"{api_E2RH}/dossiers/{numero}/salaries/{matricule}/emplois"
-            try: 
-                response = requests.get(url, headers=getDomainHeader(domain))
-                if response.status_code == 200:
-                    respjson = response.json().get("data")
-                    res[numero][matricule] = respjson
-                else:
-                    print(response.text)
-
-            except Exception as e:
-                print(f"Exception levée : {e}")
-    return res
+    for numero, _ in codeDict.items():
+        periode = utils.LastDayOfPreviousMonth()
+        if datetime.now().year != periode.year:
+            periode = datetime.now().replace(day=31)
+        url = f"{api_E2RH}/dossiers/{numero}/editions/cumuls"
+        try: 
+            payload = {
+                "code_edition": "EXP OPENPAYE CUMUL",
+                "periode_debut": f"01/01/{periode.year}",
+                "periode_fin": f"{periode.day}/{periode.month}/{periode.year}"
+            }
+            headers = getDomainHeader(domain)
+            headers["Content-Type"] = "application/json"
+            response = requests.get(url, headers=headers,json=payload)
+            if response.status_code == 200 or response.status_code == 201:
+                respjson = response.json().get("data")
+                res[numero] = respjson
+            else:
+                print(response.text)
+        except Exception as e:
+            print(f"Exception levée : {e}")
+    return res 

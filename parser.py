@@ -18,37 +18,43 @@ emptyContact = {
     "storedSince": "",
 }
 
+
 def codePays(paysSilae: int):
+    if not paysSilae:
+        return None
     res = utils.traduire_pays(paysSilae)
     if res != None:
         return res
-
     res = utils.traduire_pays(paysSilae, mode="code_vers_pays")
     if res == None:
         print(f"INFOS PAYS NON RECONNU : {paysSilae}, renvoi de None")
 
     return res
 
-
 def parseDossiers(
     dossierMap: dict[str, Dossier],
-    contactMap: JSON,
+    dossiersDetails: JSON,
     max: int,
     defaultContact: dict = emptyContact,
 ) -> list[dict]:
     openpaye_dossiers: list[dict] = []
+
     i = 1  # compte le nombre de dossiers créés
     for numero, dossier in dossierMap.items():
-        contact = contactMap[numero]
+        dossDetails = dossiersDetails[numero]
         print(f"Parsing Dossier : {dossier.numero}")
         numero = dossier.numero
-        raisonSociale = contact.get("Raison sociale", dossier.raisonSociale)
-        email = contact.get("E-mail")
-        tel = contact.get("Téléphone")
+        raisonSociale = dossier.raisonSociale
+        email = dossDetails["CLI_PersonneAContacterMel"]
+        tel = str(dossDetails["CLI_PersonneAContacterTel"]).replace(" ", "")
         nom_contact = (
-            contact.get("Employeur").removeprefix("Mr").removeprefix("Mme").strip()
+            dossDetails["CLI_EmployeurPrenom"] + " " + dossDetails["CLI_EmployeurNom"]
         )
-        qualite = role.associer_role(contact.get("Qualité")).value
+        qualSilae = extract.qualite(
+            dossDetails["CLI_EmployeurQualite"],
+            dossDetails["CLI_EmployeurQualiteAutre"],
+        )
+        qualite = role.associer_role(str(qualSilae)).value
         openpaye_dossier: dict = {
             "code": numero,
             "nom_dossier": raisonSociale,
@@ -56,7 +62,7 @@ def parseDossiers(
             "telephone": tel,
             "nom_contact": nom_contact,
             "qualite": qualite,
-            "annee": "2024",
+            "annee": str(datetime.now().year),
         }
         openpaye_dossiers.append(dataWithParams(openpaye_dossier))
         if max > 0 and i == max:
@@ -71,27 +77,14 @@ def parseDossiers(
 def parseEtablissements(
     etabMap: JSON, etabDetails: dict, codeDict: dict[str, str]
 ) -> list[dict]:
-    """
-    construction via les arguments en entrée des jsons qui permettent de créer un etablissement.
-    Chaque json sont composés de l'element "data" qui contient le json a envoyé à l'api
-    et "params" qui sont les eventuels parametres qui accompagne l'appel
-
-    Args:
-        etabMap (JSON): dictionnaire des infos de l'etablissement avec comme clé le numero du dossier
-        contactMap (JSON): dictionnaire des infos contact avec comme clé le numéro du dossier
-        codeDict (dict[str, str]): dictionnaire liant le numero de dossier à son ID interne openpaye
-
-    Returns:
-        list[dict]: renvoi la liste des jsons à transmettre pour la création des etablissements
-    """
-    res: dict = []
+    res = []
     for numero, etabsJson in etabMap.items():
         dossierId = codeDict[numero]
 
         for etabJson in etabsJson.get("informationsEtablissements"):
             print(f"Parsing Dossier {numero} Etablissement {etabJson["nomInterne"]} ")
             nomInterne = etabJson.get("nomInterne", "")
-            details = etabDetails[nomInterne]["reponsesInfosPaie"]
+            details = etabDetails[nomInterne]
 
             ccn = extract.idccToOpcc(etabJson.get("idcc"))
             ccn2 = extract.idccToOpcc(etabJson.get("idcc2"))
@@ -99,18 +92,14 @@ def parseEtablissements(
             ccn4 = extract.idccToOpcc(etabJson.get("idcc4"))
             ccn5 = extract.idccToOpcc(etabJson.get("idcc5"))
             civ = f"{int(details.get("INT_Civilite","0"))+1}"
-            
+
             newEtablissement = Etablissment(
-                code=nomInterne[
-                    :5
-                ],  # limite de 5 caractères pour le code de l'établissement
+                code=nomInterne[:5],  # limite de 5 caractères pour le code de l'établissement
                 raison_sociale=details["INT_RaisonSociale"],
                 etablissement_principal=etabJson.get("etablissement_principal", True),
                 siret=etabJson.get("siret"),
                 adresse=Adresse(
-                    adress_postale=details["INT_NumVoie"]
-                    + " "
-                    + details["INT_NomVoie"],
+                    adress_postale=details["INT_NumVoie"] + " " + details["INT_NomVoie"],
                     adress_postale2="",
                     complement_adress=details["INT_ComplementAdresse"],
                     code_postal=details["INT_CodePostal"],
@@ -123,13 +112,13 @@ def parseEtablissements(
                 activite=etabJson.get("activite", ""),
                 civilite=civ,
                 ape=details["INT_NAF"],
-                libelle_ape=etabJson.get("libAPE", ""),
+                libelle_ape=details["INT_NAFPrecision"],
                 ccn=ccn,
                 ccn2=ccn2,
                 ccn3=ccn3,
                 ccn4=ccn4,
                 ccn5=ccn5,
-                avenant=etabJson.get("avenant", False),
+                avenant=etabJson.get("application_avenants", False),
                 numero_cotisant=etabJson.get("num_cotisant", ""),
                 date_radiation=etabJson.get("date_radiation_at", ""),
                 code_risque_at=details["ETA_S41_G01_00_026_1"],
@@ -158,15 +147,14 @@ def parseEtablissements(
                 ),
             )
             etabJson = asdict(newEtablissement)
+            
             res.append(
                 utils.del_none(dataWithParams(etabJson, {"dossierId": dossierId}))
             )
-
     return res
 
 
 def parseSalaries(salDetails: dict, codeDict: dict[str, str]) -> list[dict]:
-
     res: list[dict] = []
     for numero, salaries in salDetails.items():
         dossierId = codeDict[numero]
@@ -174,20 +162,24 @@ def parseSalaries(salDetails: dict, codeDict: dict[str, str]) -> list[dict]:
             print(f"Parsing salarié {matricule} Dossier {numero} ")
 
             salarie = salarieInfos["reponsesInfosPaie"]
-            situationFamilliale = extract.situationFamiliale(salarie["INT_SituationFamiliale"])
-            adresse = salarie["INT_BTQC"] + " " + salarie["INT_NomVoie"]
+            situationFamilliale = extract.situationFamiliale(
+                salarie["INT_SituationFamiliale"]
+            )
+            adresse = salarie["INT_NumVoie"] + " " + salarie["INT_BTQC"] + " " + salarie["INT_NomVoie"]
             complement = salarie["INT_ComplementAdresse"]
 
             salJson: dict = {}
+            adresseDTO: dict = {}
+            banqueDTO: dict = {}
             salJson["matricule_salarie"] = matricule
             salJson["nbr_enfants_charge"] = salarie["SAL_NbPersACharge"]
-            salJson["iban"] = salarie["SAL_Iban1"]
-            salJson["code_bic"] = salarie["SAL_Bic1"]
-            salJson["virement"] = salarie["SAL_Iban1"] != ""
+            banqueDTO["iban"] = salarie["SAL_Iban1"]
+            banqueDTO["code_bic"] = salarie["SAL_Bic1"]
+            banqueDTO["virement"] = salarie["SAL_Iban1"] != "" and salarie["SAL_Bic1"] != ""
             salJson["civilite"] = salarie["INT_Civilite"]
             salJson["nom"] = salarie["INT_NomUsuel"]
             salJson["prenom"] = salarie["INT_Prenom"]
-            salJson["email"] = salarie["INT_Mel"]
+            salJson["email"] = salarie["INT_MelPerso"]
             salJson["nom_naissance"] = salarie["INT_NomNaissance"]
             salJson["situation_familiale"] = situationFamilliale
             salJson["numero_ss_cle"] = salarie["INT_NumeroSS"]
@@ -195,18 +187,25 @@ def parseSalaries(salDetails: dict, codeDict: dict[str, str]) -> list[dict]:
             salJson["departement"] = salarie["INT_DepartementNaissance"]
             salJson["commune_naissance"] = salarie["INT_CommuneNaissance"]
             salJson["pays_naissance"] = codePays(salarie["INT_PaysNaissance"])
-            salJson["numero_voie"] = salarie["INT_NumVoie"]
-            salJson["complement"] = adresse
-            salJson["pays"] = salarie["INT_NomPays"]
             salJson["nationalite"] = codePays(salarie["INT_PaysNationalite"])
-            salJson["frontalier"] = salarie["SAL_Frontalier"]
-            salJson["code_postal"] = salarie["INT_CodePostal"]
-            salJson["ville"] = salarie["INT_NomVille"]
-            salJson["code_insee"] = salarie["INT_CommuneINSEE"]
-            salJson["telephone"] = salarie["INT_TelPortablePro"]
+            salJson["telephone"] = salarie["INT_TelPortable"].replace(" ","").replace(".","")
+            # if salJson["telephone"].startswith("0"):
+            #     salJson["telephone"] = salJson["telephone"][1:]
+            adresseDTO["numero_voie"] = adresse
+            adresseDTO["complement"] = complement
+            adresseDTO["pays"] = codePays(salarie["INT_NomPays"])
+            adresseDTO["frontalier"] = salarie["SAL_Frontalier"]
+            adresseDTO["code_postal"] = salarie["INT_CodePostal"]
+            adresseDTO["ville"] = salarie["INT_NomVille"]
+            adresseDTO["code_insee"] = salarie["INT_CommuneINSEE"]
+
+            salJson["adresse"] = adresseDTO
+            salJson["banque"] = banqueDTO
 
             res.append(dataWithParams(salJson, {"dossierId": dossierId}))
+    res = utils.filterEmptyResData(res)
     return res
+
 
 def parseEmplois(emp_detailsMap: dict, codeDict: dict):
     res = []
@@ -215,92 +214,155 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
         numContrat = -1
         for matricule, emploiInfo in emplois.items():
             empJson: dict = {}
+            moisAExclure: dict = {}
+            joursHebdo: dict = {}
+            horaires: dict = {}
             emploi = emploiInfo["reponsesInfosPaie"]
-            print(f"Parsing salarié {matricule} Dossier {numero} ")
+            print(f"Parsing emplois {matricule} Dossier {numero} ")
             numContrat += 1
-
             # Extracting type_contrat_travail
-            cCode = (emploi["SEM_S41_G01_00_012_001"] if emploi["SEM_S41_G01_00_012_001"] != 0 else None)
-            motif = emploi["SEM_CDDMotif"] if emploi["SEM_CDDMotif"] != 0 else None
-            tContrat = ( emploi["SEM_TypeContratParticulier"] if emploi["SEM_TypeContratParticulier"] != 0 else None)
-            emploiPart = (emploi["SEM_EmpCasPart"] if emploi["SEM_EmpCasPart"] != 0 else None)
-            
-            codeTravail = extract.codeTravail(
-                code=cCode,
-                motif=motif,
-                typeContrat=tContrat,
-                emploiPart=emploiPart,
-                default_value=90,
+            cCode = (
+                emploi["SEM_S41_G01_00_012_001"]
+                if emploi["SEM_S41_G01_00_012_001"] != ""
+                else None
             )
-
-            # Extracting statut Pro
+            motif = emploi["SEM_CDDMotif"] if emploi["SEM_CDDMotif"] != "" else None
+            tContrat = (
+                emploi["SEM_TypeContratParticulier"]
+                if emploi["SEM_TypeContratParticulier"] != ""
+                else None
+            )
+            emploiPart = (
+                emploi["SEM_EmpCasPart"] if emploi["SEM_EmpCasPart"] != "" else None
+            )
+            codeTravail = extract.codeTravail(code=cCode, motif=motif, typeContrat=tContrat, emploiPart=emploiPart, default_value=90)
+            
             statutPro = extract.statutProf(str(cCode))
             opcc = extract.idccToOpcc(emploi["SEM_CodeCCN"])
-            
             ccnEmploi = extract.emploiCCN(emploi["SEM_CLM_Code"], defaultValues=(opcc, 9999))
+            print(f"\t\t\t\tEmploi conv : codeTravail {codeTravail} = cCode '{cCode}' motif '{motif}' type contrat '{tContrat}' emploi Part '{emploiPart}' opcc '{opcc}' TRADUCTION = opcc,emploiConv {ccnEmploi} statutPro '{statutPro}'")
             
             # verif si code document != code opcc traduction
             if ccnEmploi[0] != opcc:
-                code = extract.idccToOpcc(ccnEmploi[0]) 
-                opcc = code if code != None else opcc 
-
+                code = extract.idccToOpcc(ccnEmploi[0])
+                opcc = code if code != None else opcc
+            
+            empJson["ccn"] = opcc
             empJson["code_etablissement"] = emploi["EMP_NomInterneEta"][:5]  # TODO: change when codeETA can be >5 chars long
             empJson["matricule_salarie"] = matricule
             empJson["numero_contrat"] = f"{numContrat:05}"
             # empJson["ancien_numero_contrat_dsn"] = emploi[""]
             empJson["emploi_conventionnel"] = ccnEmploi[1]
-            empJson["ccn"] = opcc
-            empJson["emploi"] =  emploi["EMP_libEmploi"]
+            empJson["emploi"] = emploi["EMP_libEmploi"]
             empJson["type_contrat_travail"] = codeTravail
             # empJson["type_contrat_temps_partiel"] = emploi[""]
             empJson["statut_professionnel"] = statutPro
             empJson["regime_retraite"] = emploi["SEM_S41_G01_01_001"]
             # empJson["cas_particuliers"] = extract
-            # empJson["salaire_mensuel"] = emploi["SEM_SalaireDeBase"]
-            # empJson["date_anciennete"] = emploi["SEM_DtDebAncGrade"]
-            # empJson["date_fin_previsionnelle_contrat"] = emploi[""]
-            # empJson["date_debut_contrat"] = emploi["EMP_DateDebut"]
-            # empJson["nbr_heures_travail_mensuel_majorees"] = emploi[""]
-            # empJson["salaire_horaire"] = emploi[""]
+            empJson["date_anciennete"] = emploi["SEM_DtDebAncGrade"]
+            dtFin = emploi["EMP_DateFin"]
+            if dtFin and dtFin != "":
+                empJson["date_fin_previsionnelle_contrat"] = dtFin
+            empJson["date_debut_contrat"] = emploi["EMP_DateDebut"]
             # empJson["salarie_temps_partiel"] = emploi[""]
-            # empJson["forfait_jour"] = emploi[""]
-            # empJson["jours_hebdo"] = emploi[""]
-            # empJson["jour_lundi"] = emploi[""]
-            # empJson["jour_mardi"] = emploi[""]
-            # empJson["jour_mercredi"] = emploi[""]
-            # empJson["jour_jeudi"] = emploi[""]
-            # empJson["jour_vendredi"] = emploi[""]
-            # empJson["jour_samedi"] = emploi[""]
-            # empJson["jour_dimanche"] = emploi[""]
-            # empJson["horaire_travail"] = emploi[""]
-            # empJson["horaire_hebdo"] = emploi[""]
-            # empJson["horaire_lundi"] = emploi[""]
-            # empJson["horaire_mardi"] = emploi[""]
-            # empJson["horaire_mercredi"] = emploi[""]
-            # empJson["horaire_jeudi"] = emploi[""]
-            # empJson["horaire_vendredi"] = emploi[""]
-            # empJson["horaire_samedi"] = emploi[""]
-            # empJson["horaire_dimanche"] = emploi[""]
-            # empJson["type_salaire"] = emploi[""]
+
+            empJson["forfait_jour"] = emploi["SEM_S41_G01_00_013"] == "10"
+            typeSal = emploi["SEM_TypeSalaireDeBase"]
+            if typeSal == 0:
+                empJson["type_salaire"] = "Mensuel"
+                empJson["salaire_mensuel"] = emploi["SEM_SalaireDeBase"]
+            elif typeSal == 1:
+                empJson["type_salaire"] = "Horaire"
+                empJson["salaire_horaire"] = emploi["SEM_SalaireDeBase"]
+
+            if empJson["forfait_jour"]:
+                empJson["nbr_jour_annuels_prevus"] = emploi["SEM_FJNbJAn"]
+                # empJson["jours_hebdo"] = emploi[""]
+                # next Vaut 8.0 si c'est un jour travaillé (case correspondante cochée, 0.0 si ce n'est pas le cas)
+                joursHebdo["jour_lundi"] = emploi["SEM_HTLun"] == 8.0
+                joursHebdo["jour_mardi"] = emploi["SEM_HTMar"] == 8.0
+                joursHebdo["jour_mercredi"] = emploi["SEM_HTMer"] == 8.0
+                joursHebdo["jour_jeudi"] = emploi["SEM_HTJeu"] == 8.0
+                joursHebdo["jour_vendredi"] = emploi["SEM_HTVen"] == 8.0
+                joursHebdo["jour_samedi"] = emploi["SEM_HTSam"] == 8.0
+                joursHebdo["jour_dimanche"] = emploi["SEM_HTDim"] == 8.0
+                empJson["jours_hebdomadaires"] = joursHebdo
+            else:
+                empJson["nbr_heures_travail_mensuel_majorees"] = emploi[
+                    "SEM_HoraireMensuelHeuresMajorees"
+                ]
+                # empJson["horaire_travail"] = emploi["SEM_TotalHeures"] NOTWORK
+                # empJson["horaire_hebdo"] = emploi["SEM_MTH"] NOTWORK
+                horaires["horaire_lundi"] = emploi["SEM_HTLun"]
+                horaires["horaire_mardi"] = emploi["SEM_HTMar"]
+                horaires["horaire_mercredi"] = emploi["SEM_HTMer"]
+                horaires["horaire_jeudi"] = emploi["SEM_HTJeu"]
+                horaires["horaire_vendredi"] = emploi["SEM_HTVen"]
+                horaires["horaire_samedi"] = emploi["SEM_HTSam"]
+                horaires["horaire_dimanche"] = emploi["SEM_HTDim"]
+                empJson["horaires"] = horaires
             # empJson["ne_pas_calculer_premier_bulletin"] = emploi[""]
-            # empJson["mois_a_exclure"] = emploi[""]
-            # empJson["exclure_janvier"] = emploi[""]
-            # empJson["exclure_fevrier"] = emploi[""]
-            # empJson["exclure_mars"] = emploi[""]
-            # empJson["exclure_avril"] = emploi[""]
-            # empJson["exclure_mai"] = emploi[""]
-            # empJson["exclure_juin"] = emploi[""]
-            # empJson["exclure_juillet"] = emploi[""]
-            # empJson["exclure_aout"] = emploi[""]
-            # empJson["exclure_septembre"] = emploi[""]
-            # empJson["exclure_octobre"] = emploi[""]
-            # empJson["exclure_novembre"] = emploi[""]
-            # empJson["exclure_decembre"] = emploi[""]
-            # empJson["nbr_jour_annuels_prevus"] = emploi[""]
+            moisCompris = emploi["SEM_BulletinsMoisBits"]
+            if moisCompris != None:
+                bullArray = integerToBitArray(moisCompris)
+                moisAExclure["exclure_janvier"] = bullArray[0]
+                moisAExclure["exclure_fevrier"] = bullArray[1]
+                moisAExclure["exclure_mars"] = bullArray[2]
+                moisAExclure["exclure_avril"] = bullArray[3]
+                moisAExclure["exclure_mai"] = bullArray[4]
+                moisAExclure["exclure_juin"] = bullArray[5]
+                moisAExclure["exclure_juillet"] = bullArray[6]
+                moisAExclure["exclure_aout"] = bullArray[7]
+                moisAExclure["exclure_septembre"] = bullArray[8]
+                moisAExclure["exclure_octobre"] = bullArray[9]
+                moisAExclure["exclure_novembre"] = bullArray[10]
+                moisAExclure["exclure_decembre"] = bullArray[11]
+                moisAExclure["mois_a_exclure"] = moisAExclure
             # empJson["tags"] = emploi[""]
 
             res.append(dataWithParams(empJson, {"dossierId": dossierId}))
+    res = utils.filterEmptyResData(res)
     return res
+
+
+def updateContrats(contratsCrees, op_contratsIdToDSN):
+    contratsToUpdate = []
+    for contrat in contratsCrees:
+        oldNumDSN = op_contratsIdToDSN[contrat["matricule_salarie"]][1]
+        if not oldNumDSN or oldNumDSN == "":
+            continue
+        contrat["numero_contrat"] = oldNumDSN
+        contratsToUpdate.append(dataWithParams(contrat, None))
+    return contratsToUpdate
+
+
+def parseCumuls(cumul_detailsMap: dict, matriculeContratId: dict[str, dict]):
+    res: list = []
+    matMapDSNToContratID = {}
+    for _, encodedCumuls in cumul_detailsMap.items():
+        cumulCsv = utils.base64ToCsv(encodedCumuls)
+        col = extract.editionCumulColonnes()
+        cumulMap = utils.CsvToMap(cumulCsv)
+        varval = {}
+        for i in range(len(cumulMap)):
+            for code, titre in col.items():
+                varval[code] = cumulMap[i][titre]
+            matricule = cumulMap[i]["Matricule"]
+            for var, val in varval.items():
+                params = dict()
+                params["contratId"] = matriculeContratId[matricule]["id"]
+                params["nomVariable"] = var
+                params["valeur"] = str(float(val))
+                res.append(dataWithParams(None, params))
+                if (
+                    matriculeContratId[matricule]["date_debut_contrat"]
+                    == cumulMap[i]["Datededébutdecontrat"]
+                ):
+                    matMapDSNToContratID[matricule] = (
+                        matriculeContratId[matricule]["id"],
+                        cumulMap[i]["Numérodecontrat"],
+                    )
+    return (res, matMapDSNToContratID)
 
 
 def dataWithParams(data: dict, params: dict = None):
@@ -308,3 +370,29 @@ def dataWithParams(data: dict, params: dict = None):
     jsonWithParam["data"] = data
     jsonWithParam["params"] = params
     return jsonWithParam
+
+    # $SAL.CUMULANT_HRS" : "Heures",
+    # $SAL.CUMULANT_HRSSUP" : "HeuresSupp",
+    # $SAL.CUMULANT_BRUT" : "Brut",
+    # $SAL.CUMULANT_NET" : "Netàpayer",
+    # $SAL.CUMULANT_NETIMPO" : "Netimposable",
+    # $SAL.CUMULANT_ABAT" : "Abattement",
+    # $SAL.CUMULANT_PMSS" : "PMSS",
+    # $SAL.CUMULANT_TA" : "TrancheA",
+    # $SAL.CUMULANT_TB" : "TrancheB",
+    # $SAL.CUMULANT_TC" : "TrancheC",
+    # $SAL.CUMULANT_T2" : "Tranche2AFIRCARRCO",
+    # $SAL.CUMULANT_SMICFILLON" : "SMICFILLOn",
+    # $SAL.CUMULANT_RNF" : "MontantnetfiscaléxonérationsurHSHC",
+    # $SAL.CUMULANT_CP" : "ChargesPatronales",
+    # $SAL.CUMULANT_MTPAS" : "RetenueAlasource",
+    # $SAL.CUMULANT_BASECPN1" : "BaseCPN1",
+    # $SAL.CUMULANT_BASECPPRISN1" : "BaseCPPrisN1",
+    # $SAL.CUMULANT_CPN1" : "JoursAcquisN1",
+    # $SAL.CUMULANT_CPPRISN1" : "JoursPrisN1",
+    # $SAL.CUMULANT_BASECPN" : "BaseCPN",
+    # $SAL.CUMULANT_BASECPPRISN" : "BaseCPPrisN",
+    # $SAL.CUMULANT_CPN" : "JoursAcquisN",
+    # $SAL.CUMULANT_CPPRISN" : "JoursPrisN",
+    # $SAL.RTTACQUIS" : "RTTACQUIS",
+    # $SAL.RTTPRIS" : "RTTPRIS",

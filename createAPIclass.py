@@ -2,7 +2,7 @@
 themes = [
     "Absences", "BulletinsPaies", "Contrats", "ContratSortant", "Dossiers",
     "Editions", "Etablissements", "HeuresSupplementaires", "Options", 
-    "Primes", "Salaries", "SoldeToutComptes", "Variables", "VariablesBulletins"
+    "Primes", "Salaries", "SoldeToutComptes", "Variables", "VariablesBulletins", "VariablesRepriseDossier"
 ]
 
 print("")

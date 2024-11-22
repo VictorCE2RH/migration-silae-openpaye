@@ -23,19 +23,24 @@ class RoleOP(Enum):
 # Dictionnaire dynamique pour correspondre les textes aux rôles
 role_mapping = {
     "chef d'entreprise": RoleOP.ChefEntreprise,
+    "présidente": RoleOP.President,
     "président": RoleOP.President,
-    "presidente": RoleOP.President,
-    "president": RoleOP.President,  # Pour prendre en charge plusieurs variantes
+    "gérante": RoleOP.Gerant,
     "gérant": RoleOP.Gerant,
-    "gerant": RoleOP.Gerant,
     "directeur général": RoleOP.DG,
+    "directrice général": RoleOP.DG,
+    "DG": RoleOP.DG,
     "directeur": RoleOP.Directeur,
+    "directrice": RoleOP.Directeur,
     "comptable": RoleOP.Comptable,
     "chef du personnel": RoleOP.ChefPersonnel,
     "responsable ressources humaines": RoleOP.RH,
-    "mandataire liquidateur": RoleOP.MandataireLiquidateur,
-    "trésorière": RoleOP.Autre,
-    "secretaire général": RoleOP.Autre,
+    "responsable RH": RoleOP.RH,
+    "RH": RoleOP.RH,
+    "DRH": RoleOP.RH,
+    "Directeur RH": RoleOP.RH,
+    "Directrice RH": RoleOP.RH,
+    "mandataire liquidateur": RoleOP.MandataireLiquidateur
 }
 
 

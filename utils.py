@@ -1,9 +1,9 @@
 import json
-import pandas as pd 
-from typing import Optional
+import csv
+import base64
 import unicodedata
-from opapi import api_map
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, date, timedelta
 
 JSON = dict[str, any]
 
@@ -35,7 +35,7 @@ def saveJsonData(name: str, dataJson: any):
         json.dump(dataJson, fp, indent=4)
 
 def saveLogAction(type_action: str, codes: JSON):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     fileName = f"export_{type_action}_{timestamp}"
     if len(codes) > 0:
         saveJsonData(fileName, codes)
@@ -80,6 +80,19 @@ def del_none(d):
         elif isinstance(value, dict):
             del_none(value)
     return d  # For convenience
+
+def filterEmptyResData(res: list): 
+    for i in range(len(res)):
+        for key, data in res[i]["data"].items():
+            if isinstance(data, dict):
+                for subKey, subData in data.items():
+                    if isinstance(subData, str) and subData == '':
+                        res[i]["data"][key][subKey] = None
+                        print(f"empty subKey {key} {subKey} replaced with None")
+            if isinstance(data, str) and data == '':
+                res[i]["data"][key] = None
+                print(f"empty {key} replaced with None")
+    return res
 
 def _getCountryMap():
     pays_vers_code = {
@@ -165,10 +178,8 @@ def _getCountryMap():
 def normaliser_texte(texte):
     """
     Normalise le texte en le mettant en minuscules et en retirant les accents
-    
     Args:
         texte (str): Texte à normaliser
-    
     Returns:
         str: Texte normalisé
     """
@@ -212,3 +223,37 @@ def traduire_pays(entree, mode='pays_vers_code'):
         return code_vers_pays.get(entree.upper())
     else:
         raise ValueError("Mode invalide. Utilisez 'pays_vers_code' ou 'code_vers_pays'")
+
+# size=12 car utilisé principalement pour compter les mois de l'année dans un entier
+def integerToBitArray(code:int,size:int=12):
+    return [False if code == 0 else code & (1 << n) == 0 for n in range(size)]
+
+def base64ToCsv(base64Str:str) -> dict[str,list]:
+    decoded_bytes = base64.b64decode(base64Str)
+    csv_data = decoded_bytes.decode('latin-1')
+    rows = csv.reader(csv_data.splitlines(), delimiter=';')
+    data_dict = defaultdict(list)
+    headers = next(rows)
+    for row in rows:
+        for i, value in enumerate(row):
+            header = headers[i].strip()
+            if header == "" or (header == "Matricule" and value == ""):
+                break
+            data_dict[header].append(value.strip())
+    
+    return data_dict
+
+def CsvToMap(csv:dict[str,list]) -> list[dict[str,any]]:
+    return [ { col: csv[col][i] for col in csv } for i in range(len(next(iter(csv.values()))))]
+
+def dict_to_csv(data_dict, output_file):
+    with open(output_file, 'w', newline='', encoding='latin-1') as csvfile:
+        writer = csv.writer(csvfile,delimiter=";")
+        writer.writerow(data_dict.keys())
+        writer.writerows(zip(*data_dict.values()))
+    return data_dict
+        
+def LastDayOfPreviousMonth():
+    today = date.today()
+    lastDayPreviousMonth = today.replace(day=1) - timedelta(days=1)
+    return lastDayPreviousMonth

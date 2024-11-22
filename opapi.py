@@ -23,6 +23,7 @@ __SALARIES__ = "salaries"
 __SOLDETOUTCOMPTES__ = "soldetoutcomptes"
 __VARIABLES__ = "variables"
 __VARIABLESBULLETINS__ = "variablesbulletins"
+__VARIABLESREPRISEDOSSIER__ = "VariablesRepriseDossier"
 
 def openpaye_auth(domain: str):
     # username, password
@@ -40,8 +41,10 @@ class BaseAPI:
 
     def create(self, data:dict, params:dict=None) -> Optional[str]:
         url = f"{self.BASE_URL}/{self.resource}"
-        if config.fakeCRUD == False:
-            response = requests.post(url, auth=self.auth, json=data, headers=self.headers,params=params)
+        # if not data:
+        #     response = requests.post(url, auth=self.auth, headers=self.headers,params=params)
+        # else:
+        response = requests.post(url, auth=self.auth, json=data, headers=self.headers,params=params)
         return self._handle_response(response)
 
     def read(self, item_id: str) -> Optional[str]:
@@ -49,10 +52,10 @@ class BaseAPI:
         response = requests.get(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def update(self, item_id: str, data: dict) -> Optional[str]:
-        url = f"{self.BASE_URL}/{self.resource}/{item_id}"
+    def update(self, data: dict, params:dict=None) -> Optional[str]:
+        url = f"{self.BASE_URL}/{self.resource}/"
         response = requests.put(
-            url, auth=self.auth, json=data, headers=self.headers
+            url, auth=self.auth, json=data, headers=self.headers, params=params
         )
         return self._handle_response(response)
 
@@ -196,6 +199,10 @@ class VariablesBulletinsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__VARIABLESBULLETINS__, auth_key)
 
+class VariablesRepriseDossierEP(BaseAPI):
+    def __init__(self, auth_key: tuple[str,str]):
+        super().__init__(__VARIABLESREPRISEDOSSIER__, auth_key)
+        
 api_map = {
     __ABSENCES__: AbsencesEP,
     __BULLETINSPAIES__: BulletinsPaiesEP,
@@ -211,4 +218,5 @@ api_map = {
     __SOLDETOUTCOMPTES__: SoldeToutComptesEP,
     __VARIABLES__: VariablesEP,
     __VARIABLESBULLETINS__: VariablesBulletinsEP,
+    __VARIABLESREPRISEDOSSIER__: VariablesRepriseDossierEP
 }
