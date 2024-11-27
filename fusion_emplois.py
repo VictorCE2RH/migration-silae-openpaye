@@ -1,5 +1,44 @@
 import pandas as pd
 
+input_file = r'.\data\in\emplois_ccn_original.xlsx'
+output_file = r'.\data\in\emploi_ccn.xlsx'
+
+def get_distinct_statuts_all_sheets(fichier):
+    # Lire le fichier Excel
+    excel_file = pd.ExcelFile(fichier)
+    
+    # Set pour stocker tous les statuts uniques
+    # On utilise un set car il élimine automatiquement les doublons
+    tous_statuts = set()
+    
+    # Parcourir chaque feuille
+    for sheet_name in excel_file.sheet_names:
+        try:
+            # Lire la feuille en ignorant les deux premières lignes
+            df = pd.read_excel(excel_file, sheet_name=sheet_name, skiprows=2)
+            
+            # Récupérer les statuts de cette feuille
+            statuts_feuille = df['Statut'].dropna().unique()
+            
+            # Ajouter les statuts au set global
+            tous_statuts.update(statuts_feuille)
+            
+            print(f"Feuille '{sheet_name}' traitée avec succès")
+            
+        except Exception as e:
+            print(f"Erreur lors du traitement de la feuille '{sheet_name}': {str(e)}")
+            continue
+    
+    # Convertir le set en liste triée
+    statuts_distincts = sorted(tous_statuts)
+    
+    # Afficher les résultats
+    print("\nStatuts distincts trouvés dans toutes les feuilles :")
+    for statut in statuts_distincts:
+        print(f"- {statut}")
+    
+    return statuts_distincts
+
 def process_excel_file(input_file, output_file):
     # Lire le fichier Excel
     excel_file = pd.ExcelFile(input_file)
@@ -64,7 +103,7 @@ def process_excel_file(input_file, output_file):
     else:
         print("Aucune donnée n'a été trouvée dans les feuilles")
 
-# Exécuter le script
-input_file = r'.\data\in\emplois_ccn_original.xlsx'
-output_file = r'.\data\in\emploi_ccn.xlsx'
-process_excel_file(input_file, output_file)
+
+statuts = get_distinct_statuts_all_sheets(input_file)
+print(statuts)
+# process_excel_file(input_file, output_file)

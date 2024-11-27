@@ -215,7 +215,6 @@ def getInfosEmplois(domain:str,sal_detailsMap: dict):
 
 def getCumulsContrats(domain:str,codeDict: dict):
     res:dict[str,str] = {}
-    print(f"Export des informations salariés pour chaque documents")
     for numero, _ in codeDict.items():
         periode = utils.LastDayOfPreviousMonth()
         if datetime.now().year != periode.year:
@@ -227,8 +226,11 @@ def getCumulsContrats(domain:str,codeDict: dict):
                 "periode_debut": f"01/01/{periode.year}",
                 "periode_fin": f"{periode.day}/{periode.month}/{periode.year}"
             }
+            
             headers = getDomainHeader(domain)
             headers["Content-Type"] = "application/json"
+            
+            print(f" Cumuls Dossier {numero}, Récupération des données en cours...")
             response = requests.get(url, headers=headers,json=payload)
             if response.status_code == 200 or response.status_code == 201:
                 respjson = response.json().get("data")

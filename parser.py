@@ -2,6 +2,7 @@ from silae import Dossier
 import utils
 import role
 import extract
+import statut_pro
 from utils import *
 from etablissement import *
 
@@ -26,8 +27,8 @@ def codePays(paysSilae: int):
     if res != None:
         return res
     res = utils.traduire_pays(paysSilae, mode="code_vers_pays")
-    if res == None:
-        print(f"INFOS PAYS NON RECONNU : {paysSilae}, renvoi de None")
+    if res and res != "":
+        print(f"PAYS NON RECONNU : {paysSilae}")
 
     return res
 
@@ -213,6 +214,8 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
         dossierId = codeDict[numero]
         numContrat = -1
         for matricule, emploiInfo in emplois.items():
+            if matricule == "00003":
+                print("ROUILLET Morgan")
             empJson: dict = {}
             moisAExclure: dict = {}
             joursHebdo: dict = {}
@@ -237,11 +240,9 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
             )
             codeTravail = extract.codeTravail(code=cCode, motif=motif, typeContrat=tContrat, emploiPart=emploiPart, default_value=90)
             
-            statutPro = extract.statutProf(str(cCode))
             opcc = extract.idccToOpcc(emploi["SEM_CodeCCN"])
-            ccnEmploi = extract.emploiCCN(emploi["SEM_CLM_Code"], defaultValues=(opcc, 9999))
-            print(f"\t\t\t\tEmploi conv : codeTravail {codeTravail} = cCode '{cCode}' motif '{motif}' type contrat '{tContrat}' emploi Part '{emploiPart}' opcc '{opcc}' TRADUCTION = opcc,emploiConv {ccnEmploi} statutPro '{statutPro}'")
-            
+            ccnEmploi = extract.emploiCCN(emploi["SEM_CLM_Code"], cCode, ccn=opcc)
+            statutPro = extract.statutProf(ccnEmploi[2])
             # verif si code document != code opcc traduction
             if ccnEmploi[0] != opcc:
                 code = extract.idccToOpcc(ccnEmploi[0])
@@ -259,7 +260,8 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
             empJson["statut_professionnel"] = statutPro
             empJson["regime_retraite"] = emploi["SEM_S41_G01_01_001"]
             # empJson["cas_particuliers"] = extract
-            empJson["date_anciennete"] = emploi["SEM_DtDebAncGrade"]
+            dateAnc = emploi["SEM_DtDebAncGrade"]
+            empJson["date_anciennete"] = dateAnc if dateAnc and dateAnc != "" else emploi["EMP_DateDebut"]
             dtFin = emploi["EMP_DateFin"]
             if dtFin and dtFin != "":
                 empJson["date_fin_previsionnelle_contrat"] = dtFin
@@ -277,15 +279,15 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
 
             if empJson["forfait_jour"]:
                 empJson["nbr_jour_annuels_prevus"] = emploi["SEM_FJNbJAn"]
-                # empJson["jours_hebdo"] = emploi[""]
-                # next Vaut 8.0 si c'est un jour travaillé (case correspondante cochée, 0.0 si ce n'est pas le cas)
-                joursHebdo["jour_lundi"] = emploi["SEM_HTLun"] == 8.0
-                joursHebdo["jour_mardi"] = emploi["SEM_HTMar"] == 8.0
-                joursHebdo["jour_mercredi"] = emploi["SEM_HTMer"] == 8.0
-                joursHebdo["jour_jeudi"] = emploi["SEM_HTJeu"] == 8.0
-                joursHebdo["jour_vendredi"] = emploi["SEM_HTVen"] == 8.0
-                joursHebdo["jour_samedi"] = emploi["SEM_HTSam"] == 8.0
-                joursHebdo["jour_dimanche"] = emploi["SEM_HTDim"] == 8.0
+                
+                # Vaut 8 si c'est un jour travaillé (case correspondante cochée, 0 si ce n'est pas le cas)
+                joursHebdo["jour_lundi"] = emploi["SEM_HTLun"] == 8
+                joursHebdo["jour_mardi"] = emploi["SEM_HTMar"] == 8
+                joursHebdo["jour_mercredi"] = emploi["SEM_HTMer"] == 8
+                joursHebdo["jour_jeudi"] = emploi["SEM_HTJeu"] == 8
+                joursHebdo["jour_vendredi"] = emploi["SEM_HTVen"] == 8
+                joursHebdo["jour_samedi"] = emploi["SEM_HTSam"] == 8
+                joursHebdo["jour_dimanche"] = emploi["SEM_HTDim"] == 8
                 empJson["jours_hebdomadaires"] = joursHebdo
             else:
                 empJson["nbr_heures_travail_mensuel_majorees"] = emploi[

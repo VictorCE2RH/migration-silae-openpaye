@@ -2,13 +2,13 @@
 import dotenv
 import typer
 import json
-import sys
 import time
 from typing import Optional, List
 
 # files
 import utils
 from utils import JSON
+import logger
 import silae
 import parser
 import extract
@@ -38,7 +38,10 @@ def create(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
         response = api.create(item,params)
     if response:
         createdItem = json.loads(response)
-        typer.echo(f"{api_type} id {createdItem["id"]} Créés avec succès")
+        if api_type != opapi.__VARIABLESREPRISEDOSSIER__: 
+            logger.printSuccess(f"{api_type} id {createdItem["id"]} Créés avec succès")
+        else:
+            logger.printSuccess(f"{api_type} variable : {params["nomVariable"]} = {createdItem} Créés avec succès")
         return response
     return None
 
@@ -53,10 +56,10 @@ def read(domain: str, api_type: str, item_ids: List[str]) -> Optional[str]:
     for item_id in item_ids:
         item = api.read(item_id)
         if not item:
-            typer.echo(f"Item {item_id} does not exist in the database")
+            logger.printErr(f"Item {item_id} does not exist in the database")
             raise typer.Abort(item_id)
         itemList.append(item)
-        typer.echo(f"Lecture item : {item}")
+        logger.printSuccess(f"Lecture item : {item}")
     if len(itemList) == 0:
         return None
     return ",".join(itemList)
@@ -76,7 +79,7 @@ def update(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
         response = api.update(item,params)
     if response:
         updatedItem = json.loads(response)
-        typer.echo(f"{api_type} id {updatedItem["id"]} mis à jour avec succés")
+        logger.printSuccess(f"{api_type} id {updatedItem["id"]} mis à jour avec succés")
         return response
     return None
 
@@ -99,15 +102,13 @@ def delete(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, 
     typer.echo(f"Tentative de suppression d'item(s) {api_type} {item_ids} : ")
     read(domain, api_type, item_ids)
     if ask == True:
-        answer = typer.prompt(
-            f"Confirmez la suppression de(s) item(s) ci-dessus : [O]ui/[N]on "
-        )
+        answer = typer.prompt(f"Confirmez la suppression de(s) item(s) ci-dessus : [O]ui/[N]on ")
         if answer.lower() != "o" and answer.lower() != "oui":
             typer.echo("Annulation de la requête...")
             raise typer.Abort()
     for item_id in item_ids:
         api.delete(item_id)
-        typer.echo(f"Élément {item_id} supprimé avec succès")
+        logger.printSuccess(f"Élément {item_id} supprimé avec succès")
 
 @app.command()
 def getList(domain: str, api_type: str) -> Optional[str]:
@@ -122,7 +123,7 @@ def getList(domain: str, api_type: str) -> Optional[str]:
 def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Optional[str]:
     step = 0
     
-    typer.echo(f"STEP {step} ==== Export des dossiers depuis Silae ====")
+    logger.printProgress(f"STEP {step} ==== Export des dossiers depuis Silae ====")
     dossiersMap = silae.getDossiers(domain)
     if len(numeros) > 0:
         newDossiers: JSON = {}
@@ -139,71 +140,70 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
                 dossiersMap = newDossiers
                 break
     dossiersDetails = silae.getDossiersDetails(domain, dossiersMap)
-    typer.echo(f"STEP {step} ======== Parsing des dossiers ========")
+    logger.printProgress(f"STEP {step} ======== Parsing des dossiers ========")
     op_dossiersList = parser.parseDossiers(dossiersMap, dossiersDetails, max)
     dossiersCrees = creerMultiples(domain, opapi.__DOSSIERS__, op_dossiersList)
     codeDict = dict(list(map(lambda dossier: (dossier["code"],dossier["id"]), dossiersCrees)))
-    print(f"STEP {step} FIN ======== {len(dossiersCrees)} Dossiers Créés sur le domaine {domain} openpaye ======== \n")
+    logger.printProgress(f"STEP {step} FIN ======== {len(dossiersCrees)} Dossiers Créés sur le domaine {domain} openpaye ======== \n")
     step+=1
     
-    typer.echo(f"STEP {step} ======== Export des Etablissements depuis Silae  ======== ")
+    logger.printProgress(f"STEP {step} ======== Export des Etablissements depuis Silae  ======== ")
     if len(dossiersCrees) < len(op_dossiersList):
         #TODO: start modification with op_dossiersList
-        typer.echo("Problème de création de dossiers, voir les logs pour identifier le problème")
+        logger.printErr("Problème de création de dossiers, voir les logs pour identifier le problème")
         raise typer.Abort()
     
     # Etablissements
     etabMap = silae.getInfosEtablissements(domain, dossiersMap)
     eta_DetailsMap = silae.getEtablissementDetails(domain, etabMap)
-    typer.echo(f"STEP {step} ==== Parsing des Etablissements ====")
+    logger.printProgress(f"STEP {step} ==== Parsing des Etablissements ====")
     op_Etablissements = parser.parseEtablissements(etabMap,eta_DetailsMap, codeDict)
     etabCrees = creerMultiples(domain, opapi.__ETABLISSEMENTS__,op_Etablissements)
-    print(f"STEP {step} ======== {len(etabCrees)} Etablissements Créés sur le domaine {domain} openpaye ======== \n")
+    logger.printProgress(f"STEP {step} ======== {len(etabCrees)} Etablissements Créés sur le domaine {domain} openpaye ======== \n")
 
     step+=1
     
-    typer.echo(f"STEP {step} ======== Export des Salariés depuis Silae  ======== ")
+    logger.printProgress(f"STEP {step} ======== Export des Salariés depuis Silae  ======== ")
     # Salaries
     sal_DetailsMap = silae.getInfosSalaries(domain,codeDict) # return map[numero][matricule] = salariesdetails
-    typer.echo(f"STEP {step} ==== Parsing des Salariés ==== ")
+    logger.printProgress(f"STEP {step} ==== Parsing des Salariés ==== ")
     op_salaries = parser.parseSalaries(sal_DetailsMap,codeDict) # return list[salDict]
     salariesCrees = creerMultiples(domain,opapi.__SALARIES__,op_salaries) # return list[salDict + ['id']] 
-    print(f"STEP {step} ======== {len(salariesCrees)} Salariés créés sur le domaine {domain} openpaye ======== \n")
+    logger.printProgress(f"STEP {step} ======== {len(salariesCrees)} Salariés créés sur le domaine {domain} openpaye ======== \n")
     
     step+=1
     
-    typer.echo(f"STEP {step} ======== Export des Contrats depuis Silae  ======== ")
+    logger.printProgress(f"STEP {step} ======== Export des Contrats depuis Silae  ======== ")
     # Emploi 
     emp_detailsMap = silae.getInfosEmplois(domain,sal_DetailsMap)
-    typer.echo(f"STEP {step} ==== Parsing des Contrats ==== ")
+    logger.printProgress(f"STEP {step} ==== Parsing des Contrats ==== ")
     op_contrats = parser.parseEmplois(emp_detailsMap,codeDict)
     contratsCrees = creerMultiples(domain,opapi.__CONTRATS__,op_contrats)
-    print(f"STEP {step} ======== {len(op_contrats)} Contrats créés sur le domaine {domain} openpaye ======== \n")
+    logger.printProgress(f"STEP {step} ======== {len(op_contrats)} Contrats créés sur le domaine {domain} openpaye ======== \n")
     
     step+=1
     
     # cumuls
-    typer.echo(f"STEP {step} ======== Export des Cumuls depuis Silae  ======== ")
+    logger.printProgress(f"STEP {step} ======== Export des Cumuls depuis Silae  ======== ")
     matriculeContratId = dict(list(map(lambda contratCree: (contratCree["matricule_salarie"],{"id":contratCree["id"],"date_debut_contrat":contratCree["date_debut_contrat"]}),contratsCrees)))
     cumul_detailsMap = silae.getCumulsContrats(domain,codeDict)
-    typer.echo(f"STEP {step} ==== Parsing des Cumuls ==== ")
+    logger.printProgress(f"STEP {step} ==== Parsing des Cumuls ==== ")
     op_cumuls, op_contratsIdToDSN = parser.parseCumuls(cumul_detailsMap, matriculeContratId)
     # Modify Contrats (add contrat DSN)
     up_op_contrats = parser.updateContrats(contratsCrees,op_contratsIdToDSN)
     contratsCrees = updateMultiples(domain,opapi.__CONTRATS__, up_op_contrats)
-    print(f"STEP {step} ======== FIN : CREATION CUMULS COMMENTES ============ ")
-    
-    # cumulsCrees = creerMultiples(domain,opapi.__VARIABLESREPRISEDOSSIER__, op_cumuls)
-    # print(f"STEP {step} ======== {len(cumulsCrees)} Cumuls créés sur le domaine {domain} openpaye ======== \n")
+    logger.printProgress(f"STEP {step} ======== FIN : CREATION CUMULS COMMENTES ============ ")
+    cumulsCrees = creerMultiples(domain,opapi.__VARIABLESREPRISEDOSSIER__, op_cumuls)
+    print(f"STEP {step} ======== {len(cumulsCrees)} Cumuls créés sur le domaine {domain} openpaye ======== \n")
     
 def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
-    print(f"MULTI CREATE ==== {len(items)} new {item_type}")
+    logger.printProgress(f"MULTI CREATE ==== {len(items)} new {item_type}")
     successList: list[dict] = []
     for item in items:
         jsonStr = json.dumps(item["data"])
         jsonParams = json.dumps(item["params"])
         response = create(domain, item_type, jsonStr, jsonParams)
-        time.sleep(0.2)
+        # time.sleep(0.2)
         if response:
             if response.isdigit():
                 successList.append(response)
@@ -211,12 +211,14 @@ def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
                 createdItem = json.loads(response)
                 successList.append(createdItem)
         else:
-            print(f"Exception lors de la création de l'item {item_type} {item.get('code')}")
-            raise Exception("Interruption")
+            logger.printErr(f"Exception lors de la création de l'item {item_type} {item.get('code')}")
+            # pas d'exception sur les cumuls 
+            if item_type != opapi.__VARIABLESREPRISEDOSSIER__:
+                raise Exception("Interruption")
     return successList
 
 def updateMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
-    print(f"MULTI UPDATE ==== {len(items)} updated {item_type}")
+    logger.printProgress(f"MULTI UPDATE ==== {len(items)} updated {item_type}")
     successList: list[dict] = []
     for item in items:
         dataStr = json.dumps(item["data"])
@@ -226,19 +228,20 @@ def updateMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
             createdItem = json.loads(response)
             successList.append(createdItem)
         else:
-            print(f"Exception lors de la création de l'item {item_type} {item.get('code')}")
+            logger.printErr(f"Exception lors de la création de l'item {item_type} {item.get('code')}")
             raise Exception("Interruption")
     return successList
 
 if __name__ == "__main__":
-    print("================== Application Start Session ==================")
+    logger.printProgress("================== Application Start Session ==================")
     start = time.time()
     print(f"Mise en relation avec l'API E2RH...")
     try:
         silae.ping()
     except Exception as e:
-        print(f"Le serveur est OFF ou n'est pas accessible")
+        logger.printErr(f"Le serveur est OFF ou n'est pas accessible")
         exit(1)
     dotenv.load_dotenv()
-    print(app())
-    print(time.time() - start)
+    app()
+    logger.printStat(f"Application took {time.time() - start}s to finish")
+    logger.printProgress("================== Application Finish Session ==================")
