@@ -1,6 +1,7 @@
 import json
 import csv
 import base64
+import webbrowser
 import unicodedata
 from collections import defaultdict
 from datetime import datetime, date, timedelta
@@ -81,17 +82,16 @@ def del_none(d):
             del_none(value)
     return d  # For convenience
 
-def filterEmptyResData(res: list): 
+def filterEmptyResData(res: list):
+    print("Filtering out empty string list elements")
     for i in range(len(res)):
         for key, data in res[i]["data"].items():
             if isinstance(data, dict):
                 for subKey, subData in data.items():
                     if isinstance(subData, str) and subData == '':
                         res[i]["data"][key][subKey] = None
-                        print(f"empty subKey {key} {subKey} replaced with None")
             if isinstance(data, str) and data == '':
                 res[i]["data"][key] = None
-                print(f"empty {key} replaced with None")
     return res
 
 def _getCountryMap():
@@ -244,7 +244,7 @@ def base64ToCsv(base64Str:str) -> dict[str,list]:
     return data_dict
 
 def CsvToMap(csv:dict[str,list]) -> list[dict[str,any]]:
-    return [ { col: csv[col][i] for col in csv } for i in range(len(next(iter(csv.values()))))]
+    return [{ col: csv[col][i] for col in csv } for i in range(len(next(iter(csv.values()))))]
 
 def dict_to_csv(data_dict, output_file):
     with open(output_file, 'w', newline='', encoding='latin-1') as csvfile:
@@ -252,8 +252,13 @@ def dict_to_csv(data_dict, output_file):
         writer.writerow(data_dict.keys())
         writer.writerows(zip(*data_dict.values()))
     return data_dict
-        
-def LastDayOfPreviousMonth():
-    today = date.today()
-    lastDayPreviousMonth = today.replace(day=1) - timedelta(days=1)
-    return lastDayPreviousMonth
+
+def openCumulsWebPages(codesDict:dict):
+    first = True
+    for _, id in codesDict.items():
+        print(f"Dossier id {id} ouverture page web cumuls")
+        url = f"https://app.openpaye.co/MyApp/{id}/RepriseDossiers/Edit?dosID={id}"
+        if first:
+            webbrowser.open(url,new=1)
+        else:
+            webbrowser.open_new_tab(url)

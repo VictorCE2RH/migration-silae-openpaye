@@ -35,15 +35,20 @@ def create(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     params = None
     if paramsJson:
         params = json.loads(paramsJson)
-        response = api.create(item,params)
-    if response:
-        createdItem = json.loads(response)
+        response, ok = api.create(item,params)
+    if not ok:
         if api_type != opapi.__VARIABLESREPRISEDOSSIER__: 
-            logger.printSuccess(f"{api_type} id {createdItem["id"]} Créés avec succès")
+            logger.printErr(f"{api_type} id {createdItem["id"]} Erreur lors de la création")
         else:
-            logger.printSuccess(f"{api_type} variable : {params["nomVariable"]} = {createdItem} Créés avec succès")
-        return response
-    return None
+            logger.printErr(f"{api_type} variable : {params["nomVariable"]} Erreur lors de la création")
+        return None
+    createdItem = json.loads(response)
+    if api_type != opapi.__VARIABLESREPRISEDOSSIER__: 
+        logger.printSuccess(f"{api_type} id {createdItem["id"]} Créés avec succès")
+    else:
+        logger.printSuccess(f"{api_type} variable : {params["nomVariable"]} = {createdItem} Créés avec succès")
+    return response
+        
 
 
 @app.command()
@@ -54,12 +59,12 @@ def read(domain: str, api_type: str, item_ids: List[str]) -> Optional[str]:
     api = load_api(domain, api_type)
     itemList: List[str] = []
     for item_id in item_ids:
-        item = api.read(item_id)
-        if not item:
+        item, ok = api.read(item_id)
+        if not ok:
             logger.printErr(f"Item {item_id} does not exist in the database")
             raise typer.Abort(item_id)
         itemList.append(item)
-        logger.printSuccess(f"Lecture item : {item}")
+        print(f"Lecture item : {item}")
     if len(itemList) == 0:
         return None
     return ",".join(itemList)
@@ -76,8 +81,8 @@ def update(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     params = None
     if paramsJson:
         params = json.loads(paramsJson)
-        response = api.update(item,params)
-    if response:
+        response,ok = api.update(item,params)
+    if ok:
         updatedItem = json.loads(response)
         logger.printSuccess(f"{api_type} id {updatedItem["id"]} mis à jour avec succés")
         return response
@@ -107,18 +112,25 @@ def delete(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, 
             typer.echo("Annulation de la requête...")
             raise typer.Abort()
     for item_id in item_ids:
-        api.delete(item_id)
-        logger.printSuccess(f"Élément {item_id} supprimé avec succès")
-
+        response, ok = api.delete(item_id)
+        if ok:
+            logger.printSuccess(f"Élément {item_id} supprimé avec succès")
+        else:
+            logger.printErr(f"Erreur lors de la suppression de l'élement {item_id}")
+            
+            
 @app.command()
 def getList(domain: str, api_type: str) -> Optional[str]:
     api = load_api(domain, api_type)
-    response = api.list()
-    items = json.loads(response)
-    utils.saveJsonData(f"res_{domain}_{api_type}", items)
-    typer.echo(f"Éléments récupérés : {len(items)}")
-    return response
-
+    response, ok = api.list()
+    if ok:
+        items = json.loads(response)
+        utils.saveJsonData(f"res_{domain}_{api_type}", items)
+        logger.printStat(f"Éléments récupérés : {len(items)}")
+        return response
+    else: 
+        logger.printErr(f"Erreur lors de la récupération de la liste de {api_type}")
+        
 @app.command()
 def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Optional[str]:
     step = 0
@@ -143,7 +155,7 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
     logger.printProgress(f"STEP {step} ======== Parsing des dossiers ========")
     op_dossiersList = parser.parseDossiers(dossiersMap, dossiersDetails, max)
     dossiersCrees = creerMultiples(domain, opapi.__DOSSIERS__, op_dossiersList)
-    codeDict = dict(list(map(lambda dossier: (dossier["code"],dossier["id"]), dossiersCrees)))
+    codesDict = dict(list(map(lambda dossier: (dossier["code"],dossier["id"]), dossiersCrees)))
     logger.printProgress(f"STEP {step} FIN ======== {len(dossiersCrees)} Dossiers Créés sur le domaine {domain} openpaye ======== \n")
     step+=1
     
@@ -157,7 +169,7 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
     etabMap = silae.getInfosEtablissements(domain, dossiersMap)
     eta_DetailsMap = silae.getEtablissementDetails(domain, etabMap)
     logger.printProgress(f"STEP {step} ==== Parsing des Etablissements ====")
-    op_Etablissements = parser.parseEtablissements(etabMap,eta_DetailsMap, codeDict)
+    op_Etablissements = parser.parseEtablissements(etabMap,eta_DetailsMap, codesDict)
     etabCrees = creerMultiples(domain, opapi.__ETABLISSEMENTS__,op_Etablissements)
     logger.printProgress(f"STEP {step} ======== {len(etabCrees)} Etablissements Créés sur le domaine {domain} openpaye ======== \n")
 
@@ -165,9 +177,9 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
     
     logger.printProgress(f"STEP {step} ======== Export des Salariés depuis Silae  ======== ")
     # Salaries
-    sal_DetailsMap = silae.getInfosSalaries(domain,codeDict) # return map[numero][matricule] = salariesdetails
+    sal_DetailsMap = silae.getInfosSalaries(domain,codesDict) # return map[numero][matricule] = salariesdetails
     logger.printProgress(f"STEP {step} ==== Parsing des Salariés ==== ")
-    op_salaries = parser.parseSalaries(sal_DetailsMap,codeDict) # return list[salDict]
+    op_salaries = parser.parseSalaries(sal_DetailsMap,codesDict) # return list[salDict]
     salariesCrees = creerMultiples(domain,opapi.__SALARIES__,op_salaries) # return list[salDict + ['id']] 
     logger.printProgress(f"STEP {step} ======== {len(salariesCrees)} Salariés créés sur le domaine {domain} openpaye ======== \n")
     
@@ -177,7 +189,7 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
     # Emploi 
     emp_detailsMap = silae.getInfosEmplois(domain,sal_DetailsMap)
     logger.printProgress(f"STEP {step} ==== Parsing des Contrats ==== ")
-    op_contrats = parser.parseEmplois(emp_detailsMap,codeDict)
+    op_contrats = parser.parseEmplois(emp_detailsMap,codesDict)
     contratsCrees = creerMultiples(domain,opapi.__CONTRATS__,op_contrats)
     logger.printProgress(f"STEP {step} ======== {len(op_contrats)} Contrats créés sur le domaine {domain} openpaye ======== \n")
     
@@ -186,13 +198,15 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
     # cumuls
     logger.printProgress(f"STEP {step} ======== Export des Cumuls depuis Silae  ======== ")
     matriculeContratId = dict(list(map(lambda contratCree: (contratCree["matricule_salarie"],{"id":contratCree["id"],"date_debut_contrat":contratCree["date_debut_contrat"]}),contratsCrees)))
-    cumul_detailsMap = silae.getCumulsContrats(domain,codeDict)
+    cumul_detailsMap = silae.getCumulsContrats(domain,codesDict)
     logger.printProgress(f"STEP {step} ==== Parsing des Cumuls ==== ")
     op_cumuls, op_contratsIdToDSN = parser.parseCumuls(cumul_detailsMap, matriculeContratId)
+    logger.printProgress(f"STEP {step} ==== Opening all cumuls pages ==== ")
+    utils.openCumulsWebPages(codesDict)
     # Modify Contrats (add contrat DSN)
+    logger.printProgress(f"STEP {step} ==== Modifications numeros Contrats ==== ")
     up_op_contrats = parser.updateContrats(contratsCrees,op_contratsIdToDSN)
     contratsCrees = updateMultiples(domain,opapi.__CONTRATS__, up_op_contrats)
-    logger.printProgress(f"STEP {step} ======== FIN : CREATION CUMULS COMMENTES ============ ")
     cumulsCrees = creerMultiples(domain,opapi.__VARIABLESREPRISEDOSSIER__, op_cumuls)
     print(f"STEP {step} ======== {len(cumulsCrees)} Cumuls créés sur le domaine {domain} openpaye ======== \n")
     

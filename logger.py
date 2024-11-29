@@ -24,7 +24,7 @@ def WarningStatement(string):
 def ProgressStatement(string):
     return _coloredStatement(string,Colors.CYAN)
 def StatisticStatement(string):
-    return _coloredStatement(string,Colors.GREEN)
+    return _coloredStatement(string,Colors.BLUE)
 
 
 def printErr(string):
@@ -34,4 +34,4 @@ def printSuccess(string):
 def printProgress(string):
     print(ProgressStatement(string))
 def printStat(string):
-    print(ProgressStatement(string))
+    print(StatisticStatement(string))

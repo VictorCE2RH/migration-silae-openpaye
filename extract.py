@@ -29,7 +29,6 @@ def contactsColonnes():
 
 def editionCumulColonnes():
     prefixShort = "$SAL."
-    prefixDos = "$DOS."
     prefix = prefixShort + "CUMULANT_"
     colonnes = {
         prefix + "HRS": "Heures",
@@ -56,9 +55,8 @@ def editionCumulColonnes():
         prefix + "CPN": "JoursAcquisN",
         prefix + "CPPRISN": "JoursPrisN",
         prefixShort + "RTTACQUIS": "RTTACQUIS",
-        prefixShort + "RTTPRIS": "RTTPRIS",
+        prefixShort + "RTTPRIS": "RTTPRIS"
     }
-    # prefixDos + "DATEREPRISE"  : "DateReprise"
     # AUTRES COLONNES :
     # "BaseCPSoldeN"
     # "BaseCPSoldeN1"
@@ -266,7 +264,6 @@ def idccToOpcc(idcc):
     res = translateCode(
         chemin_fichier=_tradFile, code_recherche=idcc, nom_feuille="IDCCvsOPCC"
     )[0]
-    print(f"IDCC {idcc} OPCC {res}")
     if isinstance(res, str) and res.isdigit():
         return int(res)
     return None

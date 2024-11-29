@@ -214,8 +214,6 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
         dossierId = codeDict[numero]
         numContrat = -1
         for matricule, emploiInfo in emplois.items():
-            if matricule == "00003":
-                print("ROUILLET Morgan")
             empJson: dict = {}
             moisAExclure: dict = {}
             joursHebdo: dict = {}
@@ -241,14 +239,14 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
             codeTravail = extract.codeTravail(code=cCode, motif=motif, typeContrat=tContrat, emploiPart=emploiPart, default_value=90)
             
             opcc = extract.idccToOpcc(emploi["SEM_CodeCCN"])
-            ccnEmploi = extract.emploiCCN(emploi["SEM_CLM_Code"], cCode, ccn=opcc)
+            ccnEmploi = extract.emploiCCN(emploi["SEM_CLM_Code"], emploi["SEM_S41_G01_00_014"], ccn=opcc)
             statutPro = extract.statutProf(ccnEmploi[2])
             # verif si code document != code opcc traduction
             if ccnEmploi[0] != opcc:
                 code = extract.idccToOpcc(ccnEmploi[0])
                 opcc = code if code != None else opcc
-            
-            empJson["ccn"] = opcc
+                    
+            empJson["ccn"] = opcc if opcc == 4578 else None
             empJson["code_etablissement"] = emploi["EMP_NomInterneEta"][:5]  # TODO: change when codeETA can be >5 chars long
             empJson["matricule_salarie"] = matricule
             empJson["numero_contrat"] = f"{numContrat:05}"
@@ -319,7 +317,7 @@ def parseEmplois(emp_detailsMap: dict, codeDict: dict):
                 moisAExclure["exclure_octobre"] = bullArray[9]
                 moisAExclure["exclure_novembre"] = bullArray[10]
                 moisAExclure["exclure_decembre"] = bullArray[11]
-                moisAExclure["mois_a_exclure"] = moisAExclure
+                empJson["mois_a_exclure"] = moisAExclure
             # empJson["tags"] = emploi[""]
 
             res.append(dataWithParams(empJson, {"dossierId": dossierId}))
@@ -342,17 +340,26 @@ def parseCumuls(cumul_detailsMap: dict, matriculeContratId: dict[str, dict]):
     res: list = []
     matMapDSNToContratID = {}
     for _, encodedCumuls in cumul_detailsMap.items():
-        cumulCsv = utils.base64ToCsv(encodedCumuls)
+        cumulCsv = utils.base64ToCsv(encodedCumuls["Cumul"])
         col = extract.editionCumulColonnes()
         cumulMap = utils.CsvToMap(cumulCsv)
-        varval = {}
+        varval: dict[str,str] = {}
         for i in range(len(cumulMap)):
             for code, titre in col.items():
                 varval[code] = cumulMap[i][titre]
             matricule = cumulMap[i]["Matricule"]
+            contratID = matriculeContratId[matricule]["id"]
+            datereprise = dict()
+            datereprise["contratId"] = contratID
+            datereprise["nomVariable"] = "$DOS.DATEREPRISE"
+            datereprise["valeur"] = encodedCumuls["DateReprise"]
+            res.append(dataWithParams(None,datereprise))
             for var, val in varval.items():
+                if float(val) == 0.0:
+                    print(f"Skip 0: {var} {val}")
+                    continue # passe l'ajout de cette valeur, 0 est la valeur par défaut dans des variables de cumuls
                 params = dict()
-                params["contratId"] = matriculeContratId[matricule]["id"]
+                params["contratId"] = contratID
                 params["nomVariable"] = var
                 params["valeur"] = str(float(val))
                 res.append(dataWithParams(None, params))

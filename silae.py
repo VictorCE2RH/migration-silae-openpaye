@@ -214,27 +214,27 @@ def getInfosEmplois(domain:str,sal_detailsMap: dict):
     return res
 
 def getCumulsContrats(domain:str,codeDict: dict):
-    res:dict[str,str] = {}
-    for numero, _ in codeDict.items():
-        periode = utils.LastDayOfPreviousMonth()
-        if datetime.now().year != periode.year:
-            periode = datetime.now().replace(day=31)
+    res:dict[str,dict[str,str]] = {}
+    headers = getDomainHeader(domain)
+    headers["Content-Type"] = "application/json"
+    for numero, dossID in codeDict.items():
+        periode = datetime.today()
         url = f"{api_E2RH}/dossiers/{numero}/editions/cumuls"
+        DateReprise = f"{periode.month}/{periode.year}"
+
         try: 
             payload = {
                 "code_edition": "EXP OPENPAYE CUMUL",
                 "periode_debut": f"01/01/{periode.year}",
-                "periode_fin": f"{periode.day}/{periode.month}/{periode.year}"
+                "periode_fin": f"{periode.day}/" + DateReprise
             }
-            
-            headers = getDomainHeader(domain)
-            headers["Content-Type"] = "application/json"
-            
             print(f" Cumuls Dossier {numero}, Récupération des données en cours...")
             response = requests.get(url, headers=headers,json=payload)
             if response.status_code == 200 or response.status_code == 201:
                 respjson = response.json().get("data")
-                res[numero] = respjson
+                res[numero] = {}
+                res[numero]["DateReprise"] = DateReprise
+                res[numero]["Cumul"] = respjson
             else:
                 print(response.text)
         except Exception as e:
