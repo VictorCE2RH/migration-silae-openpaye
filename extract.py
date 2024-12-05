@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
+import logger
 import statut_pro
+import requests
 from typing import Optional
 
 
@@ -128,9 +130,14 @@ def translateCodeV2(fichier_path, nom_feuille, criteres_recherche, defaultline):
                 
         if not masque.any():  # aucune correspondance
             return defaultline
-            
-        return df[masque].to_dict('records')[0]
-
+        
+        res = df[masque].to_dict('records')[0]
+        
+        if any(pd.isna(valeur) for valeur in res.values()):
+            logger.printWarn(f"Extraction {nom_feuille} : nan values for current search {criteres_recherche} returning default line ")
+            return defaultline
+        
+        return res
     except Exception as e:
         print(f"Erreur lors de la recherche: {str(e)}")
         return defaultline
@@ -240,7 +247,7 @@ def statutProf(codeTravail):
     )[0])
 
 
-def emploiCCN(classification, statutPro, ccn):
+def emploiCCN(classification:str, statutPro, ccns):
     criteres = {
         0: classification,
         1: statutPro,
@@ -248,24 +255,31 @@ def emploiCCN(classification, statutPro, ccn):
     default = {
         "sCode": classification,
         "StatutProfessionnel": statutPro,
-        "CCN": ccn,
-        "empCode": 9999,
-        "statutPro": statut_pro.PAS_STATUT,
+        "OPCC": ccns[0],
+        "Code": 9999,
+        "Statut": statut_pro.PAS_STATUT,
         "Libellé": "-"
     }
     res = translateCodeV2(fichier_path=_tradFile, nom_feuille="emploiCCN", criteres_recherche=criteres, defaultline=default)
+    
+    return [int(res["OPCC"]), int(res["Code"]), res["Statut"]]
 
-    return [int(res["CCN"]), int(res["empCode"]), res["statutPro"]]
-
+def civilite(civilite):
+    if isinstance(civilite,str) and civilite.isdigit():
+        civilite = int(civilite)
+    res = translateCode(chemin_fichier=_tradFile,code_recherche=civilite, nom_feuille="civilite",default_value=None)[0]
+    if isinstance(res,str) and res.isdigit():
+        return int(res)
+    return None
 
 def idccToOpcc(idcc):
     if isinstance(idcc, str) and idcc.isdigit():
         idcc = int(idcc)
     res = translateCode(
         chemin_fichier=_tradFile, code_recherche=idcc, nom_feuille="IDCCvsOPCC"
-    )[0]
-    if isinstance(res, str) and res.isdigit():
-        return int(res)
+    )
+    if isinstance(res, list) and res[0].isdigit():
+        return [int(r) for r in res]
     return None
 
 
@@ -277,3 +291,70 @@ def qualite(code: str, default: str):
         default_value=default
     )[0]
 
+def regimeRetraite(regime):
+    if isinstance(regime, str) and regime.isdigit():
+        regime = int(regime)
+    res = translateCode(
+        chemin_fichier=_tradFile, code_recherche=regime, nom_feuille="regime_retraite"
+    )[0]
+    if isinstance(res, str) and res.isdigit():
+        return int(res)
+    return None
+
+
+def _normalize_code_risque(code):
+    """
+    Normalise le code risque en ajoutant un point après les 2 premiers caractères
+    si nécessaire et en mettant en majuscules.
+    
+    Args:
+        code (str): Le code risque à normaliser
+        
+    Returns:
+        str: Le code risque normalisé
+    """
+    code = code.upper()
+    # Si le code n'a pas de point après les 2 premiers caractères
+    if len(code) >= 3 and code[2] != '.':
+        code = f"{code[:2]}.{code[2:]}"
+    return code
+
+
+def getTauxAT(code_risque, annee,recursed=False):
+    """
+    Récupère le taux AT/MP pour un code risque et une année donnés. Si la source n'est pas existante, Essaye avec la source de l'année Précédante
+    
+    Args:
+        code_risque (str): Le code risque à rechercher
+        annee (int): L'année pour laquelle rechercher le taux
+        
+    Returns:
+        dict: Les informations complètes de la ligne si trouvée
+    """
+    try:
+        # Construction de l'URL avec l'année
+        url = f"https://raw.githubusercontent.com/betagouv/taux-collectifs-cotisation-atmp/refs/heads/master/taux-{annee}.json"
+        
+        # Récupération des données
+        response = requests.get(url)    
+        response.raise_for_status()  # Lève une exception si la requête échoue
+        data = response.json()
+        
+        # Normalisation du code risque fourni
+        code_normalise = _normalize_code_risque(code_risque)
+                
+        # Recherche avec le code normalisé
+        for entry in data:
+            entry_code = _normalize_code_risque(entry['Code risque'])
+            if entry_code == code_normalise:
+                return float(entry['Taux net'].replace(",",".").replace("%",""))
+                
+        return None
+        
+    except requests.RequestException as e:
+        logger.printWarn(f"Erreur lors de la récupération des données: {e}")
+        if not recursed:
+            logger.printProgress(f"Essai avec la base de l'année précédente : {annee-1}")
+            return getTauxAT(code_risque,annee-1)
+        else:
+            return None

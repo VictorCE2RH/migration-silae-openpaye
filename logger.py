@@ -35,3 +35,5 @@ def printProgress(string):
     print(ProgressStatement(string))
 def printStat(string):
     print(StatisticStatement(string))
+def printWarn(string):
+    print(WarningStatement(string))
