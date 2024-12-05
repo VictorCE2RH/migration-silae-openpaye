@@ -2,7 +2,6 @@ import requests
 import json
 import env
 from urllib.parse import urlencode
-import config
 from typing import Any, Dict, Optional
 
 api_openpaye = "https://api.openpaye.co"
@@ -39,36 +38,36 @@ class BaseAPI:
         self.headers = {"Content-Type": "application/json"}
         self.auth = auth_key
 
-    def create(self, data:dict, params:dict=None) -> (Optional[str], bool):
+    def create(self, data:dict, params:dict=None) -> tuple[Optional[str], bool]:
         url = f"{self.BASE_URL}/{self.resource}"
         response = requests.post(url, auth=self.auth, json=data, headers=self.headers,params=params)
         return self._handle_response(response)
 
-    def read(self, item_id: str) -> (Optional[str], bool):
+    def read(self, item_id: str) -> tuple[Optional[str], bool]:
         url = f"{self.BASE_URL}/{self.resource}/{item_id}"
         response = requests.get(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def update(self, data: dict, params:dict=None) -> (Optional[str], bool):
+    def update(self, data: dict, params:dict=None) -> tuple[Optional[str], bool]:
         url = f"{self.BASE_URL}/{self.resource}/"
         response = requests.put(
             url, auth=self.auth, json=data, headers=self.headers, params=params
         )
         return self._handle_response(response)
 
-    def delete(self, item_id: str) -> (Optional[str], bool):
+    def delete(self, item_id: str) -> tuple[Optional[str], bool]:
         url = f"{self.BASE_URL}/{self.resource}/{item_id}"
         response = requests.delete(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def list(self, params: dict = None) -> (Optional[str], bool):
+    def list(self, params: dict = None) -> tuple[Optional[str], bool]:
         url = f"{self.BASE_URL}/{self.resource}"
         if params:
             url += "?" + urlencode(params)
         response = requests.get(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def _handle_response(self, response: requests.Response) -> (Optional[str], bool):
+    def _handle_response(self, response: requests.Response) -> tuple[Optional[str], bool]:
         if response.status_code in [200, 201]:
             return response.text, True
         else:
@@ -109,8 +108,10 @@ class DossiersEP(BaseAPI):
         dossiers = infos[0]; total_pages = infos[1]; total_dossiers = infos[2]
         page += 1
         while page < total_pages:
+            print(f"page {page}/{total_pages}")
             nextPageDossiers, _, _ = self.getDossiersList(page)
             dossiers += nextPageDossiers
+            page += 1
         if len(dossiers) != total_dossiers:
             raise Exception(
                 f"[List Dossiers] Récupération erronée , dossiers récupérés  : {len(dossiers)} != dossiers stockés :{total_dossiers}"
@@ -142,10 +143,10 @@ class EtablissementsEP(BaseAPI):
             raise Exception()
         print(f"liste de tous les etablissements du etablissement {params["dossierId"]}")
         page = 0
-        etablissements, total_pages, total_etablissements = self.getDossiersList(page)
+        etablissements, total_pages, total_etablissements = self.getEtabList(page)
         page += 1
         while page < total_pages:
-            nextPage, _, _ = self.getDossiersList(page)
+            nextPage, _, _ = self.getEtabList(page)
             etablissements += nextPage
         if len(etablissements) != total_etablissements:
             raise Exception(
@@ -153,7 +154,7 @@ class EtablissementsEP(BaseAPI):
             )
         return json.dumps(etablissements)
 
-    def getDossiersList(self, id, num:int) -> tuple[str,int,int]:
+    def getEtabList(self, id, num:int) -> tuple[str,int,int]:
         params = dict(("dossierId", id),("page", num))
         etablissementsInfosStr, ok = super().list(params)
         if not ok:

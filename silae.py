@@ -39,7 +39,7 @@ def _getDossiersList(headers):
     try:
         response = requests.get(URL_DOSSIER, headers=headers)
         if response.status_code == 200:
-            print("Données récupérées avec succès de l'API Silae.")
+            ("liste dossiers récupérées avec succès depuis l'API Silae.")
             dossiersJson = response.json().get("data", [])
             dossiers = []
             for doss in dossiersJson:
@@ -47,9 +47,7 @@ def _getDossiersList(headers):
             return dossiers
         else:
             respJson = response.json()
-            print(
-                f"Erreur lors de la récupération des données: {respJson.get("errors")}"
-            )
+            print(f"Erreur lors de la récupération des données: {respJson.get("errors")}")
             return None
     except Exception as e:
         print(f"Exception lors de la récupération des données: {e.args[0]}")
@@ -181,7 +179,7 @@ def getInfosSalaries(domain: str, codeDict: dict):
                 respjson = response.json().get("data")
                 res[numero] = dict()
                 matricules = [matricule["matriculeSalarie"] for matricule in respjson["listeSalariesInformations"]]
-                print(matricules)
+                print(f"Dossier {numero} Récupération des détails de {len(matricules)} salariés")
                 for mat in matricules:
                     url = f"{api_E2RH}/dossiers/{numero}/salaries/{mat}/details"
                     response = requests.get(url, headers=getDomainHeader(domain))
@@ -196,9 +194,10 @@ def getInfosSalaries(domain: str, codeDict: dict):
 
 def getInfosEmplois(domain:str,sal_detailsMap: dict):
     res = dict()
-    print(f"Export des informations salariés pour chaque documents")
+    print(f"Export des informations emplois pour chaque documents")
     for numero, salaries in sal_detailsMap.items():
         res[numero] = dict()
+        print(f"Dossier {numero} Récupération des détails de {len(salaries)} contrats")
         for matricule, _ in salaries.items():
             url = f"{api_E2RH}/dossiers/{numero}/salaries/{matricule}/emplois"
             try: 
@@ -213,27 +212,27 @@ def getInfosEmplois(domain:str,sal_detailsMap: dict):
                 print(f"Exception levée : {e}")
     return res
 
-def getCumulsContrats(domain:str,codeDict: dict):
+def getCumulsContrats(domain:str,codeDict: dict[str,int]):
     res:dict[str,dict[str,str]] = {}
     headers = getDomainHeader(domain)
     headers["Content-Type"] = "application/json"
-    for numero, dossID in codeDict.items():
+    for numero, _ in codeDict.items():
         periode = datetime.today()
         url = f"{api_E2RH}/dossiers/{numero}/editions/cumuls"
-        DateReprise = f"{periode.month}/{periode.year}"
-
+        DateDebut = f"01/{periode.month-1}/{periode.year}"
+        DateFin = f"{periode.month}/{periode.year}"
         try: 
             payload = {
                 "code_edition": "EXP OPENPAYE CUMUL",
-                "periode_debut": f"01/01/{periode.year}",
-                "periode_fin": f"{periode.day}/" + DateReprise
+                "periode_debut": DateDebut,
+                "periode_fin": f"01/" + DateFin
             }
             print(f" Cumuls Dossier {numero}, Récupération des données en cours...")
             response = requests.get(url, headers=headers,json=payload)
             if response.status_code == 200 or response.status_code == 201:
                 respjson = response.json().get("data")
                 res[numero] = {}
-                res[numero]["DateReprise"] = DateReprise
+                res[numero]["DateReprise"] = DateFin
                 res[numero]["Cumul"] = respjson
             else:
                 print(response.text)
