@@ -4,6 +4,7 @@ import typer
 import json
 import time
 from typing import Optional, List
+from datetime import datetime
 
 # files
 import utils
@@ -11,7 +12,6 @@ from utils import JSON
 import logger
 import silae
 import parser
-import extract
 import opapi
 
 app = typer.Typer()
@@ -38,7 +38,7 @@ def create(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
         response, ok = api.create(item,params)
     if not ok:
         if api_type != opapi.__VARIABLESREPRISEDOSSIER__: 
-            logger.printErr(f"{api_type} id {createdItem["id"]} Erreur lors de la création")
+            logger.printErr(f"{api_type} Erreur lors de la création de {item}")
         else:
             logger.printErr(f"{api_type} variable : {params["nomVariable"]} Erreur lors de la création")
         return None
@@ -48,27 +48,31 @@ def create(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     else:
         logger.printSuccess(f"{api_type} variable : {params["nomVariable"]} = {createdItem} Créés avec succès")
     return response
-        
-
 
 @app.command()
-def read(domain: str, api_type: str, item_ids: List[str]) -> Optional[str]:
+def read(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, mute: bool = False) -> Optional[str]:
     """
     Lire un ou plusieurs éléments spécifique par ID depuis l'API OpenPaye.
     """
+    if isCode:
+        typer.echo(f"Leture {api_type} via le numero, recherche de correspondance ")
+        items = getList(domain, api_type)
+        foundIds = utils.getIdForNum(json.loads(items),item_ids)
+        
+        item_ids = foundIds
     api = load_api(domain, api_type)
     itemList: List[str] = []
     for item_id in item_ids:
         item, ok = api.read(item_id)
         if not ok:
             logger.printErr(f"Item {item_id} does not exist in the database")
-            raise typer.Abort(item_id)
+            # raise typer.Abort(item_id)
+            continue
         itemList.append(item)
-        print(f"Lecture item : {item}")
+        if not mute: print(f"Lecture item : {item}")
     if len(itemList) == 0:
         return None
-    return ",".join(itemList)
-
+    return ";".join(itemList)
 
 @app.command()
 def update(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str]) -> Optional[str]:
@@ -89,7 +93,7 @@ def update(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     return None
 
 @app.command()
-def delete(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, ask: bool = True):
+def delete(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, f: bool = False):
     """
     Supprimer un élément par ID dans l'API OpenPaye.
     """
@@ -97,16 +101,13 @@ def delete(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, 
     if isCode:
         typer.echo(f"Suppression {api_type} via le numero, recherche de correspondance ")
         items = getList(domain, api_type)
-        try :
-            foundIds = utils.getIdForNum(json.loads(items),item_ids)
-        except Exception as e:
-            print(f"aucun(e) {api_type} code {e} trouvés dans la base de données")
-            raise typer.Abort()
+        foundIds = utils.getIdForNum(json.loads(items),item_ids)
+
         typer.echo(f"Pour le(s) numero(s) {item_ids} -> {foundIds}")
         item_ids = foundIds
     typer.echo(f"Tentative de suppression d'item(s) {api_type} {item_ids} : ")
     read(domain, api_type, item_ids)
-    if ask == True:
+    if not f:
         answer = typer.prompt(f"Confirmez la suppression de(s) item(s) ci-dessus : [O]ui/[N]on ")
         if answer.lower() != "o" and answer.lower() != "oui":
             typer.echo("Annulation de la requête...")
@@ -118,23 +119,36 @@ def delete(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, 
         else:
             logger.printErr(f"Erreur lors de la suppression de l'élement {item_id}")
             
-            
 @app.command()
-def getList(domain: str, api_type: str) -> Optional[str]:
+def getList(domain: str, api_type: str, mute: bool=False) -> Optional[str]:
     api = load_api(domain, api_type)
     response, ok = api.list()
     if ok:
         items = json.loads(response)
         utils.saveJsonData(f"res_{domain}_{api_type}", items)
-        logger.printStat(f"Éléments récupérés : {len(items)}")
+        if not mute: logger.printStat(f"Éléments récupérés : {len(items)}")
         return response
     else: 
-        logger.printErr(f"Erreur lors de la récupération de la liste de {api_type}")
+        if not mute: logger.printErr(f"Erreur lors de la récupération de la liste de {api_type}")
         
 @app.command()
-def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Optional[str]:
+def exportSilae(domain: str,numeros: Optional[List[str]]) -> Optional[str]:
     step = 0
-    
+    log_file_suffix = f"{domain}_{datetime.today().strftime('%Y-%m-%d_%Hh%Mm%Ss')}"
+    # log_file_suffix = datetime.today().strftime('%Y-%m-%d_%Hh%Mm%Ss')
+
+    logger.printProgress(f"STEP {step} ==== Vérification Pré migration  ====")
+    if len(numeros) > 0:
+        typer.echo(f"Vérification de la liste de dossiers, annulation si Dossier existant")
+        items = getList(domain, opapi.__DOSSIERS__, mute=True)
+        foundIds = utils.getIdForNum(json.loads(items), numeros)
+        if len(foundIds) > 0:
+            logger.printErr(f"un ou plusieurs dossiers cible de la migrations sont déjà présent sur le domaine : {[item["code"] for item in items if item["id"] in foundIds]}")
+            raise typer.Abort()
+    logger.printProgress(f"STEP {step} FIN ==== Vérification Pré migration ====")
+
+    step += 1
+
     logger.printProgress(f"STEP {step} ==== Export des dossiers depuis Silae ====")
     dossiersMap = silae.getDossiers(domain)
     if len(numeros) > 0:
@@ -142,30 +156,21 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
         newDossiers = {numero: dossier for numero, dossier in dossiersMap.items() if numero in set(numeros)}
         typer.echo(f"Liste de numeros de dossiers indiquées, récupération avec succès de {len(newDossiers)} dossiers depuis Silae")
         dossiersMap = newDossiers
-    elif max > 0:
-        i = 0
-        newDossiers: JSON = {}
-        for numero, dossier in dossiersMap.items():
-            i += 1
-            newDossiers[numero] = dossier
-            if max == i:
-                dossiersMap = newDossiers
-                break
     dossiersDetails = silae.getDossiersDetails(domain, dossiersMap)
     logger.printProgress(f"STEP {step} ======== Parsing des dossiers ========")
-    op_dossiersList = parser.parseDossiers(dossiersMap, dossiersDetails, max)
+    op_dossiersList = parser.parseDossiers(dossiersMap, dossiersDetails)
     dossiersCrees = creerMultiples(domain, opapi.__DOSSIERS__, op_dossiersList)
     codesDict = dict(list(map(lambda dossier: (dossier["code"],dossier["id"]), dossiersCrees)))
     logger.printProgress(f"STEP {step} FIN ======== {len(dossiersCrees)} Dossiers Créés sur le domaine {domain} openpaye ======== \n")
+    
     step+=1
     
     logger.printProgress(f"STEP {step} ======== Export des Etablissements depuis Silae  ======== ")
+    # Etablissements
     if len(dossiersCrees) < len(op_dossiersList):
         #TODO: start modification with op_dossiersList
         logger.printErr("Problème de création de dossiers, voir les logs pour identifier le problème")
         raise typer.Abort()
-    
-    # Etablissements
     etabMap = silae.getInfosEtablissements(domain, dossiersMap)
     eta_DetailsMap = silae.getEtablissementDetails(domain, etabMap)
     logger.printProgress(f"STEP {step} ==== Parsing des Etablissements ====")
@@ -182,14 +187,20 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
     op_salaries = parser.parseSalaries(sal_DetailsMap,codesDict) # return list[salDict]
     salariesCrees = creerMultiples(domain,opapi.__SALARIES__,op_salaries) # return list[salDict + ['id']] 
     logger.printProgress(f"STEP {step} ======== {len(salariesCrees)} Salariés créés sur le domaine {domain} openpaye ======== \n")
-    
+
     step+=1
     
     logger.printProgress(f"STEP {step} ======== Export des Contrats depuis Silae  ======== ")
     # Emploi 
     emp_detailsMap = silae.getInfosEmplois(domain,sal_DetailsMap)
+    # Ajouter vérification pour CCN à sous spécifications (T026, M110)
+    # 1 récupérer les etabCrees & details emplois
+    up_up_etablissements = parser.updateSpecificsCcns(op_Etablissements,emp_detailsMap)
+    # 2 vérifier si etabCrees == CCN spé
+    # 3 en fonction du code emplois, changer la convention collective
+    # 
     logger.printProgress(f"STEP {step} ==== Parsing des Contrats ==== ")
-    op_contrats = parser.parseEmplois(emp_detailsMap,codesDict)
+    op_contrats = parser.parseEmplois(emp_detailsMap,eta_DetailsMap,codesDict)
     contratsCrees = creerMultiples(domain,opapi.__CONTRATS__,op_contrats)
     logger.printProgress(f"STEP {step} ======== {len(op_contrats)} Contrats créés sur le domaine {domain} openpaye ======== \n")
     
@@ -202,14 +213,20 @@ def exportSilae(domain: str,numeros: Optional[List[str]], max: int = -1) -> Opti
     logger.printProgress(f"STEP {step} ==== Parsing des Cumuls ==== ")
     op_cumuls, op_contratsIdToDSN = parser.parseCumuls(cumul_detailsMap, matriculeContratId)
     logger.printProgress(f"STEP {step} ==== Opening all cumuls pages ==== ")
-    utils.openCumulsWebPages(codesDict)
+    # utils.openCumulsWebPages(codesDict)
     # Modify Contrats (add contrat DSN)
     logger.printProgress(f"STEP {step} ==== Modifications numeros Contrats ==== ")
     up_op_contrats = parser.updateContrats(contratsCrees,op_contratsIdToDSN)
-    contratsCrees = updateMultiples(domain,opapi.__CONTRATS__, up_op_contrats)
+    contratsModif = updateMultiples(domain,opapi.__CONTRATS__, up_op_contrats)
     cumulsCrees = creerMultiples(domain,opapi.__VARIABLESREPRISEDOSSIER__, op_cumuls)
     print(f"STEP {step} ======== {len(cumulsCrees)} Cumuls créés sur le domaine {domain} openpaye ======== \n")
     
+    readAndLog(domain,opapi.__DOSSIERS__, dossiersCrees,log_file_suffix)
+    readAndLog(domain,opapi.__ETABLISSEMENTS__, etabCrees,log_file_suffix)
+    readAndLog(domain,opapi.__SALARIES__, salariesCrees,log_file_suffix)
+    readAndLog(domain,opapi.__CONTRATS__, contratsCrees,log_file_suffix)
+    # readAndLog(domain,opapi.__VARIABLESREPRISEDOSSIER__, cumulsCrees,migration_start)
+        
 def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
     logger.printProgress(f"MULTI CREATE ==== {len(items)} new {item_type}")
     successList: list[dict] = []
@@ -217,7 +234,7 @@ def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
         jsonStr = json.dumps(item["data"])
         jsonParams = json.dumps(item["params"])
         response = create(domain, item_type, jsonStr, jsonParams)
-        # time.sleep(0.2)
+        if opapi.__VARIABLESREPRISEDOSSIER__ : time.sleep(0.1)
         if response:
             if response.isdigit():
                 successList.append(response)
@@ -245,6 +262,25 @@ def updateMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
             logger.printErr(f"Exception lors de la création de l'item {item_type} {item.get('code')}")
             raise Exception("Interruption")
     return successList
+
+def readMultiples(domain:str,item_type:str, ids:list) -> list[dict]:
+    logger.printProgress(f"MULTI READ ==== {len(ids)} {item_type}")
+    successList: list[dict] = []
+    response = read(domain, item_type,ids,mute=True)
+    if response:
+        successList = [json.loads(item) for item in response.split(";")]
+        print(successList)
+    else:
+        logger.printErr(f"Exception lors de la lecture des items {len(ids)} {item_type} ")
+    return successList
+
+def readAndLog(domain, item_type, items,start_time):
+    if item_type == opapi.__VARIABLESREPRISEDOSSIER__: 
+        utils.migrationLog(items,item_type,start_time)
+        return
+    itemIds = [item["id"] for item in items]
+    itemRecap = readMultiples(domain,item_type,itemIds)
+    utils.migrationLog(itemRecap,item_type,start_time)
 
 if __name__ == "__main__":
     logger.printProgress("================== Application Start Session ==================")
