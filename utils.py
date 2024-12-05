@@ -2,12 +2,16 @@ import json
 import csv
 import base64
 import webbrowser
+import logger
 import unicodedata
+import re
+import os
+import pandas as pd
 from collections import defaultdict
 from datetime import datetime, date, timedelta
+from typing import Mapping
 
 JSON = dict[str, any]
-
 
 # Encoder : Convertir un objet Python en JSON
 def objectEncoderJson(objet):
@@ -51,9 +55,8 @@ def getIdForNum(items:dict, numList: list) -> list:
                 found = True
                 break
         if found == False:
-            raise Exception(f"{num}")
+            logger.printWarn(f"code {num} inexistant.")
     return res
-
 
 # Fonction utilitaire pour charger les données du fichier
 def load_data_from_file(file_path: str):
@@ -174,7 +177,6 @@ def _getCountryMap():
     
     return pays_vers_code, code_vers_pays, pays_normalises
 
-
 def normaliser_texte(texte):
     """
     Normalise le texte en le mettant en minuscules et en retirant les accents
@@ -191,7 +193,6 @@ def normaliser_texte(texte):
     texte = ''.join(c for c in unicodedata.normalize('NFD', texte) if unicodedata.category(c) != 'Mn')
     
     return texte
-
 
 def traduire_pays(entree, mode='pays_vers_code'):
     """
@@ -262,3 +263,81 @@ def openCumulsWebPages(codesDict:dict):
             webbrowser.open(url,new=1)
         else:
             webbrowser.open_new_tab(url)
+            
+def extract_decimal(text):
+    pattern = r'[-+]?\d*[.,]?\d+'
+    match = re.search(pattern,text)
+    if match:
+        number = match.group().replace(',','.')
+        return float(number)
+    return None
+
+def calculateJour(nbHeuresJour): 
+    if nbHeuresJour == 8:
+        return 1
+    if nbHeuresJour == 4:
+        return 0.5
+    return 0
+    
+def calculateHoraire(horaireSalarie, horaireEtab):
+    if horaireSalarie == 0:
+        return horaireEtab 
+
+    return horaireSalarie
+
+
+def flatten_dict(d, parent_key='', sep='_'):
+    """
+    Aplatit un dictionnaire contenant des dictionnaires imbriqués.
+    Exemple: {'a': {'b': 1}} devient {'a_b': 1}
+    """
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, Mapping):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+def process_data_for_excel(data):
+    """
+    Traite les données pour l'export Excel en gérant les dictionnaires imbriqués
+    """
+    # Si c'est une liste de dictionnaires
+    if isinstance(data, list):
+        # Aplatir chaque dictionnaire dans la liste
+        flattened_data = [
+            flatten_dict(item) if isinstance(item, dict) else item 
+            for item in data
+        ]
+        return flattened_data
+    # Si c'est un dictionnaire unique
+    elif isinstance(data, dict):
+        return [flatten_dict(data)]
+    # Si c'est un autre type de données
+    return data
+
+def create_excel_file(data, output_file, sheet_name='Sheet1'):
+    """Crée un fichier Excel à partir des données"""
+    try:
+        processed_data = process_data_for_excel(data)
+        df = pd.DataFrame(processed_data)
+
+        # Si le fichier existe déjà
+        if os.path.exists(output_file):
+            # Charger le fichier existant
+            with pd.ExcelWriter(output_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                nextSheet = len(writer.sheets) + 1
+                df.to_excel(writer, sheet_name=f"{nextSheet}_{sheet_name}", index=False)
+        else:
+            # Créer un nouveau fichier
+            df.to_excel(output_file, sheet_name=f"1_{sheet_name}", index=False)
+        logger.printSuccess(f"Migration Log file : {output_file}, Feuille {sheet_name} Crées : {len(data)} Lignes ajoutées")
+    except Exception as e:
+        logger.printErr(f"Erreur lors de la création du fichier Excel: {e}")
+        
+def migrationLog(createdItem, type, suffix_name):
+    _logFile = r'.\data\out'
+    _logFile = f"{_logFile}\\export_log_{start_time}.xlsx"
+    create_excel_file(createdItem,_logFile,type)
