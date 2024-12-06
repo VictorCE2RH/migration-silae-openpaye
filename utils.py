@@ -71,7 +71,7 @@ def load_data_from_file(file_path: str):
         return df.to_dict(orient="records")
     else:
         raise Exception()
-    
+
 def del_none(d):
     """
     Delete keys with the value ``None`` in a dictionary, recursively.
@@ -92,8 +92,10 @@ def filterEmptyResData(res: list):
             if isinstance(data, dict):
                 for subKey, subData in data.items():
                     if isinstance(subData, str) and subData == '':
+                        print(f"remove empty sub {key} {subKey} {subData}")
                         res[i]["data"][key][subKey] = None
             if isinstance(data, str) and data == '':
+                print(f"remove empty {key} {data}")
                 res[i]["data"][key] = None
     return res
 
@@ -229,7 +231,7 @@ def traduire_pays(entree, mode='pays_vers_code'):
 def integerToBitArray(code:int,size:int=12):
     return [False if code == 0 else code & (1 << n) == 0 for n in range(size)]
 
-def base64ToCsv(base64Str:str) -> dict[str,list]:
+def base64CSVToDict(base64Str:str) -> dict[str,list]:
     decoded_bytes = base64.b64decode(base64Str)
     csv_data = decoded_bytes.decode('latin-1')
     rows = csv.reader(csv_data.splitlines(), delimiter=';')
@@ -247,7 +249,7 @@ def base64ToCsv(base64Str:str) -> dict[str,list]:
 def CsvToMap(csv:dict[str,list]) -> list[dict[str,any]]:
     return [{ col: csv[col][i] for col in csv } for i in range(len(next(iter(csv.values()))))]
 
-def dict_to_csv(data_dict, output_file):
+def dictToCSVFile(data_dict, output_file):
     with open(output_file, 'w', newline='', encoding='latin-1') as csvfile:
         writer = csv.writer(csvfile,delimiter=";")
         writer.writerow(data_dict.keys())
@@ -263,13 +265,14 @@ def openCumulsWebPages(codesDict:dict):
             webbrowser.open(url,new=1)
         else:
             webbrowser.open_new_tab(url)
-            
+
 def extract_decimal(text):
     pattern = r'[-+]?\d*[.,]?\d+'
     match = re.search(pattern,text)
     if match:
         number = match.group().replace(',','.')
         return float(number)
+    logger.printWarn(f"No decimal found in text : {text}")
     return None
 
 def calculateJour(nbHeuresJour): 
@@ -278,13 +281,12 @@ def calculateJour(nbHeuresJour):
     if nbHeuresJour == 4:
         return 0.5
     return 0
-    
+
 def calculateHoraire(horaireSalarie, horaireEtab):
     if horaireSalarie == 0:
         return horaireEtab 
 
     return horaireSalarie
-
 
 def flatten_dict(d, parent_key='', sep='_'):
     """
@@ -336,8 +338,8 @@ def create_excel_file(data, output_file, sheet_name='Sheet1'):
         logger.printSuccess(f"Migration Log file : {output_file}, Feuille {sheet_name} Crées : {len(data)} Lignes ajoutées")
     except Exception as e:
         logger.printErr(f"Erreur lors de la création du fichier Excel: {e}")
-        
+
 def migrationLog(createdItem, type, suffix_name):
     _logFile = r'.\data\out'
-    _logFile = f"{_logFile}\\export_log_{start_time}.xlsx"
+    _logFile = f"{_logFile}\\export_log_{suffix_name}.xlsx"
     create_excel_file(createdItem,_logFile,type)

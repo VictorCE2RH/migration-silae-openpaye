@@ -19,7 +19,6 @@ emptyContact = {
     "storedSince": "",
 }
 
-
 def codePays(paysSilae: int):
     if not paysSilae:
         return None
@@ -86,6 +85,10 @@ def parseEtablissements(etabMap: JSON, etabDetails: dict, codeDict: dict[str, st
 
             civ = extract.civilite(int(details["INT_Civilite"]))
             
+            virement = etabJson.get("b_virement", False)
+            bic = etabJson["code_bic"] if etabJson["code_bic"] != '' else None
+            iban = etabJson["iban"] if etabJson["iban"] != '' else None
+            
             tauxAT = details["ETA_S41_G01_00_028_1"]
             if tauxAT == 0:
                 tauxAT = extract.getTauxAT(details["ETA_S41_G01_00_026_1"],datetime.now().year)
@@ -125,9 +128,9 @@ def parseEtablissements(etabMap: JSON, etabDetails: dict, codeDict: dict[str, st
                 ),
                 taux_versement_transport=etabJson.get("taux_versement_transport", 0.0),
                 banque=Banque(
-                    virement=etabJson.get("b_virement", False),
-                    code_bic=etabJson.get("code_bic", ""),
-                    iban=etabJson.get("iban", ""),
+                    virement=virement,
+                    code_bic=bic,
+                    iban=iban,
                 ),
                 gestion_conges_payes=GestionCongesPayes(
                     mois_cloture_droits_cp=details["ETA_MoisClotureCP"],
@@ -223,6 +226,7 @@ def parseEmplois(emp_detailsMap: dict,etab_detailsMap:dict, codeDict: dict):
             
             opcc = extract.idccToOpcc(emploi["SEM_CodeCCN"])
             ccnEmploi = extract.emploiCCN(emploi["SEM_CLM_Code"], emploi["SEM_S41_G01_00_014"], ccns=opcc)
+            logger.printStat(f"ccn Emploi : {emploi["SEM_CLM_Code"]} {emploi["SEM_S41_G01_00_014"]} {opcc} = {ccnEmploi}")
             statutPro = extract.statutProf(ccnEmploi[2])
             # verif si code document != code opcc traduction
             if ccnEmploi[0] != opcc:
@@ -241,15 +245,18 @@ def parseEmplois(emp_detailsMap: dict,etab_detailsMap:dict, codeDict: dict):
             empJson["regime_retraite"] = extract.regimeRetraite(emploi["SEM_S41_G01_00_015_002"])
             # empJson["cas_particuliers"] = extract
             dateAnc = emploi["SEM_DtDebAncGrade"]
+            empJson["date_debut_contrat"] = emploi["EMP_DateDebut"]
+            empJson["date_debut_emploi"] = emploi["EMP_DateDebut"]
             empJson["date_anciennete"] = dateAnc if dateAnc and dateAnc != "" else emploi["EMP_DateDebut"]
             dtFin = emploi["EMP_DateFin"]
             if dtFin and dtFin != "":
                 empJson["date_fin_previsionnelle_contrat"] = dtFin
-            empJson["date_debut_contrat"] = emploi["EMP_DateDebut"]
-
+            
             empJson["forfait_jour"] = emploi["SEM_S41_G01_00_013"] == "10"
             typeSal = emploi["SEM_TypeSalaireDeBase"]
-            salBase = utils.extract_decimal(emploi["SEM_SalaireDeBase"])
+            salBase = utils.extract_decimal(emploi["SEM_SalaireDeBase"]) 
+            salBase = salBase if salBase != 0 else None
+            
             if typeSal == 0:
                 empJson["type_salaire"] = "Mensuel"
                 empJson["salaire_mensuel"] = salBase
@@ -272,23 +279,26 @@ def parseEmplois(emp_detailsMap: dict,etab_detailsMap:dict, codeDict: dict):
             else:
                 hMMensuel = emploi["SEM_HoraireMensuelHeuresMajorees"]
                 empJson["nbr_heures_travail_mensuel_majorees"] = hMMensuel if hMMensuel > 0 else etabDetails["ETA_HMHoraireMensuel"]
-                
-                hLun = utils.calculateHoraire(emploi["SEM_HTLun"] + emploi["SEM_HMLun"], etabDetails["ETA_HTLun"] + etabDetails["ETA_HMLun"])
-                hMar = utils.calculateHoraire(emploi["SEM_HTMar"] + emploi["SEM_HMMar"], etabDetails["ETA_HTMar"] + etabDetails["ETA_HMMar"])
-                hMer = utils.calculateHoraire(emploi["SEM_HTMer"] + emploi["SEM_HMMer"], etabDetails["ETA_HTMer"] + etabDetails["ETA_HMMer"])
-                hJeu = utils.calculateHoraire(emploi["SEM_HTJeu"] + emploi["SEM_HMJeu"], etabDetails["ETA_HTJeu"] + etabDetails["ETA_HMJeu"])
-                hVen = utils.calculateHoraire(emploi["SEM_HTVen"] + emploi["SEM_HMVen"], etabDetails["ETA_HTVen"] + etabDetails["ETA_HMVen"])
-                hSam = utils.calculateHoraire(emploi["SEM_HTSam"] + emploi["SEM_HMSam"], etabDetails["ETA_HTSam"] + etabDetails["ETA_HMSam"])
-                hDim = utils.calculateHoraire(emploi["SEM_HTDim"] + emploi["SEM_HMDim"], etabDetails["ETA_HTDim"] + etabDetails["ETA_HMDim"])
-                horaires["horaire_lundi"]       = float(hLun)
-                horaires["horaire_mardi"]       = float(hMar)
-                horaires["horaire_mercredi"]    = float(hMer)
-                horaires["horaire_jeudi"]       = float(hJeu)
-                horaires["horaire_vendredi"]    = float(hVen)
-                horaires["horaire_samedi"]      = float(hSam)
-                horaires["horaire_dimanche"]    = float(hDim)
+                totalHebdoSalarie = emploi["SEM_HTLun"] + emploi["SEM_HTMar"] + emploi["SEM_HTMer"] + emploi["SEM_HTJeu"] + emploi["SEM_HTVen"] + emploi["SEM_HTSam"] + emploi["SEM_HTDim"]
+                if totalHebdoSalarie == 0:
+                    horaires["horaire_lundi"] = float(etabDetails["ETA_HTLun"]) + float(etabDetails["ETA_HMLun"])
+                    horaires["horaire_mardi"] = float(etabDetails["ETA_HTMar"]) + float(etabDetails["ETA_HMMar"])
+                    horaires["horaire_mercredi"] = float(etabDetails["ETA_HTMer"]) + float(etabDetails["ETA_HMMer"])
+                    horaires["horaire_jeudi"] = float(etabDetails["ETA_HTJeu"]) + float(etabDetails["ETA_HMJeu"])
+                    horaires["horaire_vendredi"] = float(etabDetails["ETA_HTVen"]) + float(etabDetails["ETA_HMVen"])
+                    horaires["horaire_samedi"] = float(etabDetails["ETA_HTSam"]) + float(etabDetails["ETA_HMSam"])
+                    horaires["horaire_dimanche"] = float(etabDetails["ETA_HTDim"]) + float(etabDetails["ETA_HMDim"])
+                else: 
+                    horaires["horaire_lundi"] = float(emploi["SEM_HTLun"]) + float(emploi["SEM_HMLun"])  
+                    horaires["horaire_mardi"] = float(emploi["SEM_HTMar"]) + float(emploi["SEM_HMMar"])  
+                    horaires["horaire_mercredi"] = float(emploi["SEM_HTMer"]) + float(emploi["SEM_HMMer"])
+                    horaires["horaire_jeudi"] = float(emploi["SEM_HTJeu"]) + float(emploi["SEM_HMJeu"])
+                    horaires["horaire_vendredi"] = float(emploi["SEM_HTVen"]) + float(emploi["SEM_HMVen"])
+                    horaires["horaire_samedi"] = float(emploi["SEM_HTSam"]) + float(emploi["SEM_HMSam"]) 
+                    horaires["horaire_dimanche"] = float(emploi["SEM_HTDim"]) + float(emploi["SEM_HMDim"])
                 horaires["horaire_hebdo"] = horaires["horaire_lundi"] + horaires["horaire_mardi"] + horaires["horaire_mercredi"] + horaires["horaire_jeudi"] + horaires["horaire_vendredi"] + horaires["horaire_samedi"] + horaires["horaire_dimanche"]
                 horaires["horaire_travail"] = emploi['SEM_HoraireMensuel'] if emploi['SEM_HoraireMensuel'] > 0 else float(etabDetails["ETA_HNHoraireMensuel"]) + float(etabDetails["ETA_HMHoraireMensuel"])
+                
                 empJson["horaires"] = horaires
                 empJson["salarie_temps_partiel"] = horaires["horaire_hebdo"] < 35
                 # empJson["type_contrat_temps_partiel"] = emploi[""]
@@ -322,13 +332,8 @@ def updateContrats(contratsCrees, op_contratsIdToDSN):
         contratToDSN = op_contratsIdToDSN.get(contrat["matricule_salarie"],None)
         if not contratToDSN or contratToDSN == () or contratToDSN[1] == "":
             continue
-        newContrat["id"] = contrat["id"]
-        newContrat["code_etablissement"] = contrat["code_etablissement"]
-        newContrat["matricule_salarie"] = contrat["matricule_salarie"]
-        newContrat["type_contrat_travail"] = contrat["type_contrat_travail"]
-        newContrat["statut_professionnel"] = contrat["statut_professionnel"]
-        newContrat["numero_contrat"] = contratToDSN[1]
-        contratsToUpdate.append(dataWithParams(newContrat, None))
+        contrat["numero_contrat"] = contratToDSN[1]
+        contratsToUpdate.append(dataWithParams(contrat, None))
     return contratsToUpdate
 
 def parseCumuls(cumul_detailsMap: dict, matriculeContratId: dict[str, dict]):
@@ -336,7 +341,7 @@ def parseCumuls(cumul_detailsMap: dict, matriculeContratId: dict[str, dict]):
     nbSkips = 0
     matMapDSNToContratID = {}
     for _, encodedCumuls in cumul_detailsMap.items():
-        cumulCsv = utils.base64ToCsv(encodedCumuls["Cumul"])
+        cumulCsv = utils.base64CSVToDict(encodedCumuls["Cumul"])
         col = extract.editionCumulColonnes()
         cumulMap = utils.CsvToMap(cumulCsv)
         varval: dict[str,str] = {}

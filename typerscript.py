@@ -58,7 +58,6 @@ def read(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, mu
         typer.echo(f"Leture {api_type} via le numero, recherche de correspondance ")
         items = getList(domain, api_type)
         foundIds = utils.getIdForNum(json.loads(items),item_ids)
-        
         item_ids = foundIds
     api = load_api(domain, api_type)
     itemList: List[str] = []
@@ -137,15 +136,16 @@ def exportSilae(domain: str,numeros: Optional[List[str]]) -> Optional[str]:
     log_file_suffix = f"{domain}_{datetime.today().strftime('%Y-%m-%d_%Hh%Mm%Ss')}"
     # log_file_suffix = datetime.today().strftime('%Y-%m-%d_%Hh%Mm%Ss')
 
-    logger.printProgress(f"STEP {step} ==== Vérification Pré migration  ====")
+    logger.printProgress(f"STEP {step} ==== Suppression Dossiers Existants  ====")
     if len(numeros) > 0:
         typer.echo(f"Vérification de la liste de dossiers, annulation si Dossier existant")
-        items = getList(domain, opapi.__DOSSIERS__, mute=True)
-        foundIds = utils.getIdForNum(json.loads(items), numeros)
+        listString = getList(domain, opapi.__DOSSIERS__, mute=True)
+        items = json.loads(listString)
+        foundIds = utils.getIdForNum(items, numeros)
         if len(foundIds) > 0:
             logger.printErr(f"un ou plusieurs dossiers cible de la migrations sont déjà présent sur le domaine : {[item["code"] for item in items if item["id"] in foundIds]}")
             raise typer.Abort()
-    logger.printProgress(f"STEP {step} FIN ==== Vérification Pré migration ====")
+    logger.printProgress(f"STEP {step} FIN ==== Suppression Dossiers Existants ====")
 
     step += 1
 
@@ -195,7 +195,7 @@ def exportSilae(domain: str,numeros: Optional[List[str]]) -> Optional[str]:
     emp_detailsMap = silae.getInfosEmplois(domain,sal_DetailsMap)
     # Ajouter vérification pour CCN à sous spécifications (T026, M110)
     # 1 récupérer les etabCrees & details emplois
-    up_up_etablissements = parser.updateSpecificsCcns(op_Etablissements,emp_detailsMap)
+    # up_up_etablissements = parser.updateSpecificsCcns(op_Etablissements,emp_detailsMap)
     # 2 vérifier si etabCrees == CCN spé
     # 3 en fonction du code emplois, changer la convention collective
     # 
@@ -203,6 +203,7 @@ def exportSilae(domain: str,numeros: Optional[List[str]]) -> Optional[str]:
     op_contrats = parser.parseEmplois(emp_detailsMap,eta_DetailsMap,codesDict)
     contratsCrees = creerMultiples(domain,opapi.__CONTRATS__,op_contrats)
     logger.printProgress(f"STEP {step} ======== {len(op_contrats)} Contrats créés sur le domaine {domain} openpaye ======== \n")
+    
     
     step+=1
     
@@ -224,8 +225,8 @@ def exportSilae(domain: str,numeros: Optional[List[str]]) -> Optional[str]:
     readAndLog(domain,opapi.__DOSSIERS__, dossiersCrees,log_file_suffix)
     readAndLog(domain,opapi.__ETABLISSEMENTS__, etabCrees,log_file_suffix)
     readAndLog(domain,opapi.__SALARIES__, salariesCrees,log_file_suffix)
-    readAndLog(domain,opapi.__CONTRATS__, contratsCrees,log_file_suffix)
-    # readAndLog(domain,opapi.__VARIABLESREPRISEDOSSIER__, cumulsCrees,migration_start)
+    readAndLog(domain,opapi.__CONTRATS__,contratsCrees,log_file_suffix)
+    readAndLog(domain,opapi.__VARIABLESREPRISEDOSSIER__, cumulsCrees,log_file_suffix,directLog=True)
         
 def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
     logger.printProgress(f"MULTI CREATE ==== {len(items)} new {item_type}")
@@ -234,7 +235,7 @@ def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
         jsonStr = json.dumps(item["data"])
         jsonParams = json.dumps(item["params"])
         response = create(domain, item_type, jsonStr, jsonParams)
-        if opapi.__VARIABLESREPRISEDOSSIER__ : time.sleep(0.1)
+        if opapi.__VARIABLESREPRISEDOSSIER__ : time.sleep(0.3)
         if response:
             if response.isdigit():
                 successList.append(response)
@@ -244,8 +245,8 @@ def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
         else:
             logger.printErr(f"Exception lors de la création de l'item {item_type} {item.get('code')}")
             # pas d'exception sur les cumuls 
-            if item_type != opapi.__VARIABLESREPRISEDOSSIER__:
-                raise Exception("Interruption")
+            # if item_type != opapi.__VARIABLESREPRISEDOSSIER__:
+            #     raise Exception("Interruption")
     return successList
 
 def updateMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
@@ -274,8 +275,8 @@ def readMultiples(domain:str,item_type:str, ids:list) -> list[dict]:
         logger.printErr(f"Exception lors de la lecture des items {len(ids)} {item_type} ")
     return successList
 
-def readAndLog(domain, item_type, items,start_time):
-    if item_type == opapi.__VARIABLESREPRISEDOSSIER__: 
+def readAndLog(domain, item_type, items,start_time, directLog: bool=False):
+    if directLog: 
         utils.migrationLog(items,item_type,start_time)
         return
     itemIds = [item["id"] for item in items]

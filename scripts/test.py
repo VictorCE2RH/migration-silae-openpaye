@@ -1,3 +1,8 @@
+import sys
+import os
+import base64
+# Ajoute le dossier parent au PYTHONPATH
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import extract
 import utils
 import silae
@@ -152,3 +157,9 @@ if __name__ == "__main__":
     testTauxAT("271ZF",2023,8.83)
     testTauxAT("27.1ZF",2024,7.38)
     testTauxAT("unknown",2024,None)
+    
+    JOURNALPAIE=r".\data\in\base64JournalPaie"
+    with open(JOURNALPAIE, encoding="utf-8") as f:
+        content = base64.b64decode(f.read())
+    with open(r".\data\out\edition_journal_paie.xml",'w',encoding="utf-8") as f:
+        f.write(str(content))

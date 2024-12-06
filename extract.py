@@ -5,7 +5,6 @@ import statut_pro
 import requests
 from typing import Optional
 
-
 def contactsColonnes():
     colonnes = [
         "Numéro interne",
@@ -27,7 +26,6 @@ def contactsColonnes():
     ]
 
     return colonnes
-
 
 def editionCumulColonnes():
     prefixShort = "$SAL."
@@ -74,7 +72,6 @@ def editionCumulColonnes():
     # "TotalReductionGénéraleRetraite"
     return colonnes
 
-
 def excel_vers_dictionnaire_multi_colonnes(
         fichier_excel: str, ligneEntete: int, colonne_cle: str, colonnes_valeurs: list[str]
 ) -> dict[str, dict[str, str]]:
@@ -102,7 +99,6 @@ def excel_vers_dictionnaire_multi_colonnes(
 
     return dictionnaire
 
-
 def translateCodeV2(fichier_path, nom_feuille, criteres_recherche, defaultline):
     """
     Recherche des données dans un fichier Excel selon des index de colonnes.
@@ -120,15 +116,15 @@ def translateCodeV2(fichier_path, nom_feuille, criteres_recherche, defaultline):
     try:
         df = pd.read_excel(fichier_path, sheet_name=nom_feuille, dtype=str)
         masque = pd.Series(True, index=df.index)
-
         for index_col, valeur in criteres_recherche.items():
             if index_col < len(df.columns):
                 # print(f"searching {index_col} {valeur}")
                 masque &= df.iloc[:, index_col].astype(
                     str).str.contains(str(valeur), case=False, na=False)
-                # print(df.iloc[:, index_col][masque]) 
+                # print(df.iloc[:, index_col][masque])
                 
-        if not masque.any():  # aucune correspondance
+                
+        if not masque.any():
             return defaultline
         
         res = df[masque].to_dict('records')[0]
@@ -142,15 +138,7 @@ def translateCodeV2(fichier_path, nom_feuille, criteres_recherche, defaultline):
         print(f"Erreur lors de la recherche: {str(e)}")
         return defaultline
 
-
-def translateCode(
-        chemin_fichier: str,
-        code_recherche: any,
-        nom_feuille: str,
-        colonne_source: int = 0,
-        colonnes_cible: list[int] = [1],
-        default_value: Optional[any] = None,
-) -> list[str]:
+def translateCode(chemin_fichier: str,code_recherche: any,nom_feuille: str,colonne_source: int = 0,colonnes_cible: list[int] = [1],default_value: Optional[any] = None) -> list[str]:
     pd.set_option("display.precision", 0)
     df = pd.read_excel(chemin_fichier, sheet_name=nom_feuille, dtype=str)
     
@@ -169,7 +157,6 @@ def translateCode(
         resultats.append(res)
 
     return resultats
-
 
 def translateCodes(chemin_fichier: str, colonnes: list[str], valeurs: list[str], nom_feuille: str, colonne_cible: int, default_res: Optional[str] = None) -> Optional[int]:
     """
@@ -197,9 +184,7 @@ def translateCodes(chemin_fichier: str, colonnes: list[str], valeurs: list[str],
 
     return int(resultat.iloc[0]) if not resultat.empty else default_res
 
-
 _tradFile = r"C:\Users\e2rh0\Victor_E2RH\workspace\open-paye-migration\data\in\traduction_code_silae_openpaye.xlsx"
-
 
 def codeTravail(code: str = None, motif: str = None, typeContrat: int = None, emploiPart: str = None, default_value=None):
     colIndex = []
@@ -219,15 +204,16 @@ def codeTravail(code: str = None, motif: str = None, typeContrat: int = None, em
         colIndex.append(4)
         values.append(emploiPart)
 
+    default = str(int(code)) if code and int(code) in [1,2,3,29,32,89] else default_value
+
     return translateCodes(
         _tradFile,
         colIndex,
         values,
         "type_contrat_travail",
         5,
-        default_res=default_value,
+        default_res=default,
     )
-
 
 def situationFamiliale(codeSilae: int):
     return translateCode(
@@ -237,7 +223,6 @@ def situationFamiliale(codeSilae: int):
         default_value=10,
     )[0]
 
-
 def statutProf(codeTravail):
     return int(translateCode(
         chemin_fichier=_tradFile,
@@ -245,7 +230,6 @@ def statutProf(codeTravail):
         nom_feuille="statut_professionnel",
         default_value=90,
     )[0])
-
 
 def emploiCCN(classification:str, statutPro, ccns):
     criteres = {
@@ -260,6 +244,10 @@ def emploiCCN(classification:str, statutPro, ccns):
         "Statut": statut_pro.PAS_STATUT,
         "Libellé": "-"
     }
+    
+    if classification == '' or statutPro == '':
+        return [int(default["OPCC"]), int(default["Code"]),default["Statut"]]
+    
     res = translateCodeV2(fichier_path=_tradFile, nom_feuille="emploiCCN", criteres_recherche=criteres, defaultline=default)
     
     return [int(res["OPCC"]), int(res["Code"]), res["Statut"]]
@@ -282,7 +270,6 @@ def idccToOpcc(idcc):
         return [int(r) for r in res]
     return None
 
-
 def qualite(code: str, default: str):
     return translateCode(
         chemin_fichier=_tradFile,
@@ -301,7 +288,6 @@ def regimeRetraite(regime):
         return int(res)
     return None
 
-
 def _normalize_code_risque(code):
     """
     Normalise le code risque en ajoutant un point après les 2 premiers caractères
@@ -318,7 +304,6 @@ def _normalize_code_risque(code):
     if len(code) >= 3 and code[2] != '.':
         code = f"{code[:2]}.{code[2:]}"
     return code
-
 
 def getTauxAT(code_risque, annee,recursed=False):
     """

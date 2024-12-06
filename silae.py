@@ -40,7 +40,7 @@ def _getDossiersList(headers):
         response = requests.get(URL_DOSSIER, headers=headers)
         if response.status_code == 200:
             ("liste dossiers récupérées avec succès depuis l'API Silae.")
-            dossiersJson = response.json().get("data", [])
+            dossiersJson = response.json()["Data"]
             dossiers = []
             for doss in dossiersJson:
                 dossiers.append(Dossier(doss))
@@ -69,21 +69,17 @@ def _getContactFromNum(numero, headers):
             f"{api_E2RH}/dossiers/{numero}/collab", headers=headers
         )
         if response.status_code == 200:
-            silae_data = response.json().get("data")
+            silae_data = response.json().get("Data")
             contact = silae_data.get("listeUtilisateursDossierPaie")
             if contact:
-                print(
-                    f"Numero : {numero}  collab : {contact.get("prenom")} {contact.get("nom")}"
-                )
+                print(f"Numero : {numero}  collab : {contact.get("prenom")} {contact.get("nom")}")
                 if contact:
                     return contact
                 else:
                     print("Aucun contact trouvé pour ce dossier.")
                     return None
         else:
-            print(
-                f"Erreur lors de la récupération des contacts: {response.status_code}"
-            )
+            print(f"Erreur lors de la récupération des contacts: {response.status_code}")
             return None
 
     except Exception as e:
@@ -112,7 +108,7 @@ def getDossiersDetails(domain: str, dossiersMap:dict[str, Dossier]):
             response = requests.get(url, headers=headers)
             if response.status_code == 200:
                 print("Données récupérées avec succès de l'API Silae.")
-                dossiersJson = response.json().get("data", [])
+                dossiersJson = response.json().get("Data", [])
                 res[numero] = dossiersJson["reponsesInfosPaie"]
             else:
                 respJson = response.json()
@@ -127,25 +123,27 @@ def getDossiersDetails(domain: str, dossiersMap:dict[str, Dossier]):
 
 
 def getInfosEtablissements(domain: str, dossiersMap: dict[str, Dossier]):
-    print(f"Export des informations d'etablissement de chaque dossier")
+    print(f"Export des etablissements de chaque dossier")
     res:dict = {}
     for numero, dossier in dossiersMap.items():
         url = f"{api_E2RH}/dossiers/{numero}/etablissements"
         try:
             response = requests.get(url, headers=getDomainHeader(domain))
             if response.status_code == 200:
-                etabJson = response.json().get("data")
+                etabJson = response.json().get("Data")
                 res[numero] = etabJson
+                print(f"Dossier {numero} Etablissement(s) récupéré(s)")
             else:
                 print(
                     f"Dossier : {dossier.numero} Erreur récupération établissement {response.text}"
                 )
         except Exception as e:
             print(f"getInfosEtablissements : exception raised {e}")
+            raise e
     return res
 
 def getEtablissementDetails(domain: str, etabMap: dict):
-    print(f"Export des informations d'etablissement de chaque dossier")
+    print(f"Export des détails d'etablissement de chaque dossier")
     etabDetailsMap = dict()
     for numero, etabs in etabMap.items():
         for etab in etabs['informationsEtablissements']:
@@ -154,7 +152,7 @@ def getEtablissementDetails(domain: str, etabMap: dict):
             try:
                 response = requests.get(url, headers=getDomainHeader(domain))
                 if response.status_code == 200:
-                    etabJson = response.json().get("data")
+                    etabJson = response.json().get("Data")
                     print(
                         f"Dossier : {numero} Etablissement {nomInterne}, détails récupérés"
                     )
@@ -176,7 +174,7 @@ def getInfosSalaries(domain: str, codeDict: dict):
         try: 
             response = requests.get(url, headers=getDomainHeader(domain))
             if response.status_code == 200:
-                respjson = response.json().get("data")
+                respjson = response.json().get("Data")
                 res[numero] = dict()
                 matricules = [matricule["matriculeSalarie"] for matricule in respjson["listeSalariesInformations"]]
                 print(f"Dossier {numero} Récupération des détails de {len(matricules)} salariés")
@@ -184,7 +182,7 @@ def getInfosSalaries(domain: str, codeDict: dict):
                     url = f"{api_E2RH}/dossiers/{numero}/salaries/{mat}/details"
                     response = requests.get(url, headers=getDomainHeader(domain))
                     if response.status_code == 200:
-                        respjson = response.json().get("data")
+                        respjson = response.json().get("Data")
                         res[numero][mat] = respjson
                     else:
                         print(response.text)
@@ -203,13 +201,14 @@ def getInfosEmplois(domain:str,sal_detailsMap: dict):
             try: 
                 response = requests.get(url, headers=getDomainHeader(domain))
                 if response.status_code == 200:
-                    respjson = response.json().get("data")
+                    respjson = response.json().get("Data")
                     res[numero][matricule] = respjson
                 else:
                     print(response.text)
 
             except Exception as e:
                 print(f"Exception levée : {e}")
+    print(f" {len(res)} récupérés ")
     return res
 
 def getCumulsContrats(domain:str,codeDict: dict[str,int]):
@@ -230,7 +229,7 @@ def getCumulsContrats(domain:str,codeDict: dict[str,int]):
             print(f" Cumuls Dossier {numero}, Récupération des données en cours...")
             response = requests.get(url, headers=headers,json=payload)
             if response.status_code == 200 or response.status_code == 201:
-                respjson = response.json().get("data")
+                respjson = response.json().get("Data")
                 res[numero] = {}
                 res[numero]["DateReprise"] = DateFin
                 res[numero]["Cumul"] = respjson
