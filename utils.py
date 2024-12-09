@@ -92,10 +92,10 @@ def filterEmptyResData(res: list):
             if isinstance(data, dict):
                 for subKey, subData in data.items():
                     if isinstance(subData, str) and subData == '':
-                        print(f"remove empty sub {key} {subKey} {subData}")
+                        # print(f"remove empty sub {key} {subKey} {subData}")
                         res[i]["data"][key][subKey] = None
             if isinstance(data, str) and data == '':
-                print(f"remove empty {key} {data}")
+                # print(f"remove empty {key} {data}")
                 res[i]["data"][key] = None
     return res
 
@@ -343,3 +343,9 @@ def migrationLog(createdItem, type, suffix_name):
     _logFile = r'.\data\out'
     _logFile = f"{_logFile}\\export_log_{suffix_name}.xlsx"
     create_excel_file(createdItem,_logFile,type)
+
+def removeDuplicates(items: list[str]) -> list[str]:
+    return list(dict.fromkeys(items))
+
+def valid(statusCode:int) -> bool:
+    return (statusCode in [200,201])

@@ -147,10 +147,8 @@ def parseEtablissements(etabMap: JSON, etabDetails: dict, codeDict: dict[str, st
                 ),
             )
             etabJson = asdict(newEtablissement)
-            
-            res.append(
-                utils.del_none(dataWithParams(etabJson, {"dossierId": dossierId}))
-            )
+            res.append(utils.del_none(dataWithParams(etabJson, {"dossierId": dossierId})))
+    res = filterEmptyResData(res)
     return res
 
 def parseSalaries(salDetails: dict, codeDict: dict[str, str]) -> list[dict]:

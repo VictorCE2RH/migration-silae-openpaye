@@ -1,6 +1,8 @@
 import requests
 import json
 import env
+import logger
+from utils import valid
 from urllib.parse import urlencode
 from typing import Any, Dict, Optional
 
@@ -24,9 +26,11 @@ __VARIABLES__ = "variables"
 __VARIABLESBULLETINS__ = "variablesbulletins"
 __VARIABLESREPRISEDOSSIER__ = "VariablesRepriseDossier"
 
+
 def openpaye_auth(domain: str):
     # username, password
     return env.getLogs(domain)
+
 
 class BaseAPI:
     BASE_URL = "https://api.openpaye.co"  # URL de base de ton API
@@ -38,41 +42,42 @@ class BaseAPI:
         self.headers = {"Content-Type": "application/json"}
         self.auth = auth_key
 
-    def create(self, data:dict, params:dict=None) -> tuple[Optional[str], bool]:
+    def create(self, data: dict, params: dict = None) -> tuple[Optional[str], int]:
         url = f"{self.BASE_URL}/{self.resource}"
-        response = requests.post(url, auth=self.auth, json=data, headers=self.headers,params=params)
+        response = requests.post(
+            url, auth=self.auth, json=data, headers=self.headers, params=params)
         return self._handle_response(response)
 
-    def read(self, item_id: str) -> tuple[Optional[str], bool]:
+    def read(self, item_id: str) -> tuple[Optional[str], int]:
         url = f"{self.BASE_URL}/{self.resource}/{item_id}"
         response = requests.get(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def update(self, data: dict, params:dict=None) -> tuple[Optional[str], bool]:
+    def update(self, data: dict, params: dict = None) -> tuple[Optional[str], int]:
         url = f"{self.BASE_URL}/{self.resource}/"
         response = requests.put(
             url, auth=self.auth, json=data, headers=self.headers, params=params
         )
         return self._handle_response(response)
 
-    def delete(self, item_id: str) -> tuple[Optional[str], bool]:
+    def delete(self, item_id: str) -> tuple[Optional[str], int]:
         url = f"{self.BASE_URL}/{self.resource}/{item_id}"
         response = requests.delete(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def list(self, params: dict = None) -> tuple[Optional[str], bool]:
+    def getlist(self, params: dict = None) -> tuple[Optional[str], int]:
         url = f"{self.BASE_URL}/{self.resource}"
         if params:
             url += "?" + urlencode(params)
         response = requests.get(url, auth=self.auth, headers=self.headers)
         return self._handle_response(response)
 
-    def _handle_response(self, response: requests.Response) -> tuple[Optional[str], bool]:
-        if response.status_code in [200, 201]:
-            return response.text, True
+    def _handle_response(self, response: requests.Response) -> tuple[Optional[str], int]:
+        if valid(response.status_code):
+            return response.text, response.status_code
         else:
             print(f"Error {response.url} response : {response.status_code} - {response.text}")
-            return None, False
+            return None, response.status_code
 
 
 class AbsencesEP(BaseAPI):
@@ -99,35 +104,35 @@ class DossiersEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__DOSSIERS__, auth_key)
 
-    def list(self, params:dict=None):
+    def getlist(self, params: dict = None):
         print("liste de tous les dossiers")
         page = 0
-        infos = self.getDossiersList(page)
-        if not infos: 
-            return None, False
-        dossiers = infos[0]; total_pages = infos[1]; total_dossiers = infos[2]
-        page += 1
+        dossiers,total_pages,total_dossiers, status_code = self.getDossiersList(page)
+        if not valid(status_code):
+            return None, status_code
         while page < total_pages:
-            print(f"page {page}/{total_pages}")
-            nextPageDossiers, _, _ = self.getDossiersList(page)
-            dossiers += nextPageDossiers
             page += 1
+            nextPageDossiers, _, _, status_code = self.getDossiersList(page)
+            if not valid(status_code):
+                logger.printWarn(f"dossiers.getlist : Erreur {status_code} récupération Dossiers page {page}")
+                continue
+            dossiers += nextPageDossiers
         if len(dossiers) != total_dossiers:
-            raise Exception(
-                f"[List Dossiers] Récupération erronée , dossiers récupérés  : {len(dossiers)} != dossiers stockés :{total_dossiers}"
-            )
-        return json.dumps(dossiers), True
+            raise Exception(f"[List Dossiers] Récupération erronée , dossiers récupérés  : {len(dossiers)} != dossiers stockés :{total_dossiers}")
+        return json.dumps(dossiers), status_code
 
-    def getDossiersList(self, num:int) -> tuple[str,int,int]:
+    def getDossiersList(self, num: int) -> tuple[str, int, int, int]:
         params = {"page": num}
-        dossiersInfosStr, ok = super().list(params)
-        if not ok:
-            return None
+        dossiersInfosStr, status_code = super().getlist(params)
+        if not valid(status_code):
+            return None, 0, 0, status_code
         dossiersInfos = json.loads(dossiersInfosStr)
         dossiers = dossiersInfos.get("dossiers")
         total_dossiers = int(dossiersInfos.get("total_count"))
         total_pages = int(dossiersInfos.get("total_pages"))
-        return dossiers, total_pages, total_dossiers
+        print(f"page {num+1}/{total_pages}")
+        return dossiers, total_pages, total_dossiers, status_code
+
 
 class EditionsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
@@ -137,37 +142,45 @@ class EditionsEP(BaseAPI):
 class EtablissementsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__ETABLISSEMENTS__, auth_key)
-    
-    def list(self, params:dict=None):
+
+    def getlist(self, params: dict = None):
         if params["dossierId"] == None:
             raise Exception()
-        print(f"liste de tous les etablissements du etablissement {params["dossierId"]}")
+        dossierId = params["dossierId"]
+        print(f"liste de tous les etablissements du etablissement {dossierId}")
         page = 0
-        etablissements, total_pages, total_etablissements = self.getEtabList(page)
+        etablissements, total_pages, total_etablissements, status_code = self.getEtabList(dossierId,page)
+        if not valid(status_code):
+            return None, status_code
         page += 1
         while page < total_pages:
-            nextPage, _, _ = self.getEtabList(page)
+            page += 1
+            nextPage, _, _, status_code = self.getEtabList(dossierId,page)
+            if not valid(status_code):
+                logger.printWarn(f"etablissements.getlist : Erreur {status_code} récupération etablissements dossier {dossierId} page {page}")
+                continue
             etablissements += nextPage
         if len(etablissements) != total_etablissements:
-            raise Exception(
-                f"[List Dossiers] Récupération erronée , etablissements récupérés  : {len(etablissements)} != etablissements stockés :{total_etablissements}"
-            )
-        return json.dumps(etablissements)
+            raise Exception(f"[List Etablissements] Récupération erronée , etablissements récupérés  : {len(etablissements)} != etablissements stockés :{total_etablissements}")
+        return json.dumps(etablissements), status_code
 
-    def getEtabList(self, id, num:int) -> tuple[str,int,int]:
-        params = dict(("dossierId", id),("page", num))
-        etablissementsInfosStr, ok = super().list(params)
-        if not ok:
-            return None
+    def getEtabList(self, id, num: int) -> tuple[list, int, int, int]:
+        params = {"dossierId": id, "page": num}
+        etablissementsInfosStr, status_code = super().getlist(params)
+        if not valid(status_code):
+            return None, 0, 0, status_code
         etablissementsInfos = json.loads(etablissementsInfosStr)
         etablissements = etablissementsInfos.get("etablissements")
         total_etablissements = int(etablissementsInfos.get("total_count"))
         total_pages = int(etablissementsInfos.get("total_pages"))
-        return etablissements, total_pages, total_etablissements
+        print(f"page {num+1}/{total_pages}")
+        return etablissements, total_pages, total_etablissements, status_code
+
 
 class HeuresSupplementairesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__HEURESSUPPLEMENTAIRES__, auth_key)
+
 
 class OptionsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
@@ -198,10 +211,12 @@ class VariablesBulletinsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__VARIABLESBULLETINS__, auth_key)
 
+
 class VariablesRepriseDossierEP(BaseAPI):
-    def __init__(self, auth_key: tuple[str,str]):
+    def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__VARIABLESREPRISEDOSSIER__, auth_key)
-        
+
+
 api_map = {
     __ABSENCES__: AbsencesEP,
     __BULLETINSPAIES__: BulletinsPaiesEP,

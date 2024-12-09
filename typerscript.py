@@ -35,8 +35,16 @@ def create(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     params = None
     if paramsJson:
         params = json.loads(paramsJson)
-        response, ok = api.create(item,params)
-    if not ok:
+        response, status_code = api.create(item,params)
+    if status_code == 409:
+        if item["code"]:
+            response = read(domain,api_type, [item["code"]],isCode=True,mute=True)
+            if not response:
+                print(f"CREATE -> READ : l'item devrait exister dans la base, verifier le type de l'item et son id {dataJson}")
+                raise typer.Abort()
+            readItem = json.loads(response)
+        return readItem
+    if not utils.valid(status_code):
         if api_type != opapi.__VARIABLESREPRISEDOSSIER__: 
             logger.printErr(f"{api_type} Erreur lors de la création de {item}")
         else:
@@ -56,15 +64,19 @@ def read(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, mu
     """
     if isCode:
         typer.echo(f"Leture {api_type} via le numero, recherche de correspondance ")
-        items = getList(domain, api_type)
-        foundIds = utils.getIdForNum(json.loads(items),item_ids)
+        itemString = getList(domain, api_type)
+        if not itemString:
+            logger.printErr(f"read code : list of {api_type} is None")
+            raise typer.Abort()
+        items = json.loads(itemString)
+        foundIds = utils.getIdForNum(items, item_ids)
         item_ids = foundIds
     api = load_api(domain, api_type)
     itemList: List[str] = []
     for item_id in item_ids:
-        item, ok = api.read(item_id)
-        if not ok:
-            logger.printErr(f"Item {item_id} does not exist in the database")
+        item, statusCode = api.read(item_id)
+        if not utils.valid(statusCode):
+            logger.printErr(f"{api_type} {item_id} : erreur lors de la lecture de l'item")
             # raise typer.Abort(item_id)
             continue
         itemList.append(item)
@@ -84,45 +96,54 @@ def update(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     params = None
     if paramsJson:
         params = json.loads(paramsJson)
-        response,ok = api.update(item,params)
-    if ok:
-        updatedItem = json.loads(response)
-        logger.printSuccess(f"{api_type} id {updatedItem["id"]} mis à jour avec succés")
-        return response
-    return None
+        response, statusCode = api.update(item,params)
+    if not utils.valid(statusCode):
+        logger.printErr(f"{api_type} {item["id"]} : Erreur {statusCode} lors de la mise à jour de l'item.")
+        return None
+    updatedItem = json.loads(response)
+    logger.printSuccess(f"{api_type} id {updatedItem["id"]} mis à jour avec succés")
+    return response
 
 @app.command()
 def delete(domain: str, api_type: str, item_ids: List[str], isCode: bool=False, f: bool = False):
     """
     Supprimer un élément par ID dans l'API OpenPaye.
     """
+    ids = utils.removeDuplicates(item_ids)
     api = load_api(domain, api_type)
-    if isCode:
+    if isCode: 
         typer.echo(f"Suppression {api_type} via le numero, recherche de correspondance ")
-        items = getList(domain, api_type)
-        foundIds = utils.getIdForNum(json.loads(items),item_ids)
-
-        typer.echo(f"Pour le(s) numero(s) {item_ids} -> {foundIds}")
-        item_ids = foundIds
-    typer.echo(f"Tentative de suppression d'item(s) {api_type} {item_ids} : ")
-    read(domain, api_type, item_ids)
+        itemString = getList(domain, api_type)
+        try:
+            items = json.loads(itemString)
+            foundIds = utils.getIdForNum(items,ids)
+            typer.echo(f"Pour le(s) numero(s) {ids} -> {foundIds}")
+            ids = foundIds
+        except Exception as e:
+            print(f"json loads couldn't resolve {e}")
+    typer.echo(f"Tentative de suppression d'item(s) {api_type} {ids} : ")
+    read(domain, api_type, ids)
     if not f:
         answer = typer.prompt(f"Confirmez la suppression de(s) item(s) ci-dessus : [O]ui/[N]on ")
         if answer.lower() != "o" and answer.lower() != "oui":
             typer.echo("Annulation de la requête...")
             raise typer.Abort()
-    for item_id in item_ids:
-        response, ok = api.delete(item_id)
-        if ok:
+    for item_id in ids:
+        response, status_code = api.delete(item_id)
+        if utils.valid(status_code):
             logger.printSuccess(f"Élément {item_id} supprimé avec succès")
         else:
             logger.printErr(f"Erreur lors de la suppression de l'élement {item_id}")
             
 @app.command()
-def getList(domain: str, api_type: str, mute: bool=False) -> Optional[str]:
+def getList(domain: str, api_type: str, dossierId: Optional[int] = None, mute: bool=False) -> Optional[str]:
     api = load_api(domain, api_type)
-    response, ok = api.list()
-    if ok:
+    if dossierId: 
+        params = {"dossierId":  dossierId}
+        response, status_code = api.getlist(params)
+    else:
+        response, status_code = api.getlist()
+    if utils.valid(status_code):
         items = json.loads(response)
         utils.saveJsonData(f"res_{domain}_{api_type}", items)
         if not mute: logger.printStat(f"Éléments récupérés : {len(items)}")
@@ -131,13 +152,14 @@ def getList(domain: str, api_type: str, mute: bool=False) -> Optional[str]:
         if not mute: logger.printErr(f"Erreur lors de la récupération de la liste de {api_type}")
         
 @app.command()
-def exportSilae(domain: str,numeros: Optional[List[str]]) -> Optional[str]:
+def exportSilae(domain: str, numeros: Optional[List[str]]) -> Optional[str]:
     step = 0
     log_file_suffix = f"{domain}_{datetime.today().strftime('%Y-%m-%d_%Hh%Mm%Ss')}"
     # log_file_suffix = datetime.today().strftime('%Y-%m-%d_%Hh%Mm%Ss')
-
+    
     logger.printProgress(f"STEP {step} ==== Suppression Dossiers Existants  ====")
     if len(numeros) > 0:
+        numeros = utils.removeDuplicates(numeros)
         typer.echo(f"Vérification de la liste de dossiers, annulation si Dossier existant")
         listString = getList(domain, opapi.__DOSSIERS__, mute=True)
         items = json.loads(listString)

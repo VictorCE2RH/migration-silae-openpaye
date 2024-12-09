@@ -201,7 +201,7 @@
             "name": "[typer] list E2RH Dossiers",
             "type": "debugpy",
             "request": "launch",
-            "program": "./main.py",
+            "program": "./typerscript.py",
             "console": "integratedTerminal",
             "args": [
                 "getlist",
