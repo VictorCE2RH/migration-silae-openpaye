@@ -186,7 +186,7 @@
             ]
         },
         {
-            "name": "[typer] exportsilae OR052-20",
+            "name": "[typer] exportsilae debug",
             "type": "debugpy",
             "request": "launch",
             "program": "./typerscript.py",
@@ -194,7 +194,7 @@
             "args": [
                 "exportsilae",
                 "E2RH",
-                "OR052-20"
+                "4KOR0027"
             ]
         },
         {
@@ -208,6 +208,19 @@
                 "E2RH",
                 "dossiers"
             ]
-        }
+        },
+        {
+            "name": "[typer] export E2RH Dossiers existant",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./typerscript.py",
+            "console": "integratedTerminal",
+            "args": [
+                "exportsilae",
+                "E2RH",
+                "OR104-20"
+            ]
+        },
+        
     ]
 }

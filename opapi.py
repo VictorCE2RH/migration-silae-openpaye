@@ -44,8 +44,7 @@ class BaseAPI:
 
     def create(self, data: dict, params: dict = None) -> tuple[Optional[str], int]:
         url = f"{self.BASE_URL}/{self.resource}"
-        response = requests.post(
-            url, auth=self.auth, json=data, headers=self.headers, params=params)
+        response = requests.post(url, auth=self.auth, json=data, headers=self.headers, params=params)
         return self._handle_response(response)
 
     def read(self, item_id: str) -> tuple[Optional[str], int]:
@@ -55,9 +54,7 @@ class BaseAPI:
 
     def update(self, data: dict, params: dict = None) -> tuple[Optional[str], int]:
         url = f"{self.BASE_URL}/{self.resource}/"
-        response = requests.put(
-            url, auth=self.auth, json=data, headers=self.headers, params=params
-        )
+        response = requests.put(url, auth=self.auth, json=data, headers=self.headers, params=params)
         return self._handle_response(response)
 
     def delete(self, item_id: str) -> tuple[Optional[str], int]:
@@ -75,53 +72,50 @@ class BaseAPI:
     def _handle_response(self, response: requests.Response) -> tuple[Optional[str], int]:
         if valid(response.status_code):
             return response.text, response.status_code
-        else:
-            print(f"Error {response.url} response : {response.status_code} - {response.text}")
+        if response.status_code == 409:
+            logger.printWarn(f"\nWarning {response.url} response : {response.status_code} - {response.text}\n")
             return None, response.status_code
-
-
-class AbsencesEP(BaseAPI):
-    def __init__(self, auth_key: tuple[str, str]):
-        super().__init__(__ABSENCES__, auth_key)
-
-
-class BulletinsPaiesEP(BaseAPI):
-    def __init__(self, auth_key: tuple[str, str]):
-        super().__init__(__BULLETINSPAIES__, auth_key)
-
-
-class ContratsEP(BaseAPI):
-    def __init__(self, auth_key: tuple[str, str]):
-        super().__init__(__CONTRATS__, auth_key)
-
-
-class ContratSortantEP(BaseAPI):
-    def __init__(self, auth_key: tuple[str, str]):
-        super().__init__(__CONTRATSORTANT__, auth_key)
-
+        logger.printErr(f"\nError {response.url} response : {response.status_code} - {response.text} {response.headers} \n")
+        return None, response.status_code
 
 class DossiersEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__DOSSIERS__, auth_key)
 
-    def getlist(self, params: dict = None):
-        print("liste de tous les dossiers")
+    # def create(self, data: dict, params:dict = None):
+    #     if not data:
+    #         raise Exception("Aucune donnée à créer")
+    #     response, status_code = super().create(data,params)
+    #     if valid(status_code):
+    #         return response, status_code
+        
+    #     if status_code == 409:
+    #         logger.printProgress(f"Récupération de l'item existant")
+    #         respList, status_code = self.getlist(prints=False)
+    #         if valid(status_code):
+    #             items = json.loads(respList)
+    #             readItem = [item for item in items if item["code"] == data["code"]]
+    #             if readItem:
+    #                 return json.dumps(readItem[0]), status_code
+    
+    def getlist(self, prints: bool =True):
+        if prints: print("liste de tous les dossiers")
         page = 0
-        dossiers,total_pages,total_dossiers, status_code = self.getDossiersList(page)
+        dossiers,total_pages,total_dossiers, status_code = self.getDossiersList(page,prints=False)
         if not valid(status_code):
             return None, status_code
         while page < total_pages:
             page += 1
-            nextPageDossiers, _, _, status_code = self.getDossiersList(page)
+            nextPageDossiers, _, _, status_code = self.getDossiersList(page,prints=False)
             if not valid(status_code):
-                logger.printWarn(f"dossiers.getlist : Erreur {status_code} récupération Dossiers page {page}")
+                if prints: logger.printWarn(f"dossiers.getlist : Erreur {status_code} récupération Dossiers page {page}")
                 continue
             dossiers += nextPageDossiers
         if len(dossiers) != total_dossiers:
             raise Exception(f"[List Dossiers] Récupération erronée , dossiers récupérés  : {len(dossiers)} != dossiers stockés :{total_dossiers}")
         return json.dumps(dossiers), status_code
 
-    def getDossiersList(self, num: int) -> tuple[str, int, int, int]:
+    def getDossiersList(self, num: int, prints: bool) -> tuple[str, int, int, int]:
         params = {"page": num}
         dossiersInfosStr, status_code = super().getlist(params)
         if not valid(status_code):
@@ -130,13 +124,8 @@ class DossiersEP(BaseAPI):
         dossiers = dossiersInfos.get("dossiers")
         total_dossiers = int(dossiersInfos.get("total_count"))
         total_pages = int(dossiersInfos.get("total_pages"))
-        print(f"page {num+1}/{total_pages}")
+        if prints: print(f"page {num+1}/{total_pages}")
         return dossiers, total_pages, total_dossiers, status_code
-
-
-class EditionsEP(BaseAPI):
-    def __init__(self, auth_key: tuple[str, str]):
-        super().__init__(__EDITIONS__, auth_key)
 
 
 class EtablissementsEP(BaseAPI):
@@ -176,6 +165,29 @@ class EtablissementsEP(BaseAPI):
         print(f"page {num+1}/{total_pages}")
         return etablissements, total_pages, total_etablissements, status_code
 
+
+class AbsencesEP(BaseAPI):
+    def __init__(self, auth_key: tuple[str, str]):
+        super().__init__(__ABSENCES__, auth_key)
+
+
+class BulletinsPaiesEP(BaseAPI):
+    def __init__(self, auth_key: tuple[str, str]):
+        super().__init__(__BULLETINSPAIES__, auth_key)
+
+
+class ContratsEP(BaseAPI):
+    def __init__(self, auth_key: tuple[str, str]):
+        super().__init__(__CONTRATS__, auth_key)
+
+
+class ContratSortantEP(BaseAPI):
+    def __init__(self, auth_key: tuple[str, str]):
+        super().__init__(__CONTRATSORTANT__, auth_key)
+
+class EditionsEP(BaseAPI):
+    def __init__(self, auth_key: tuple[str, str]):
+        super().__init__(__EDITIONS__, auth_key)
 
 class HeuresSupplementairesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):

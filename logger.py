@@ -20,7 +20,7 @@ def SuccessStatement(string):
 def ErrorStatement(string):
     return _coloredStatement(string,Colors.RED+Colors.BOLD) 
 def WarningStatement(string):
-    return _coloredStatement(string,Colors.YELLOW)
+    return _coloredStatement(string,Colors.YELLOW+Colors.BOLD)
 def ProgressStatement(string):
     return _coloredStatement(string,Colors.CYAN)
 def StatisticStatement(string):

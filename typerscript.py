@@ -35,15 +35,7 @@ def create(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     params = None
     if paramsJson:
         params = json.loads(paramsJson)
-        response, status_code = api.create(item,params)
-    if status_code == 409:
-        if item["code"]:
-            response = read(domain,api_type, [item["code"]],isCode=True,mute=True)
-            if not response:
-                print(f"CREATE -> READ : l'item devrait exister dans la base, verifier le type de l'item et son id {dataJson}")
-                raise typer.Abort()
-            readItem = json.loads(response)
-        return readItem
+    response, status_code = api.create(item,params)
     if not utils.valid(status_code):
         if api_type != opapi.__VARIABLESREPRISEDOSSIER__: 
             logger.printErr(f"{api_type} Erreur lors de la création de {item}")
@@ -96,7 +88,7 @@ def update(domain: str, api_type: str, dataJson: str, paramsJson: Optional[str])
     params = None
     if paramsJson:
         params = json.loads(paramsJson)
-        response, statusCode = api.update(item,params)
+    response, statusCode = api.update(item,params)
     if not utils.valid(statusCode):
         logger.printErr(f"{api_type} {item["id"]} : Erreur {statusCode} lors de la mise à jour de l'item.")
         return None
@@ -255,10 +247,10 @@ def creerMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
     successList: list[dict] = []
     for item in items:
         jsonStr = json.dumps(item["data"])
-        jsonParams = json.dumps(item["params"])
+        jsonParams = json.dumps(item["params"]) if item["params"] else None
         response = create(domain, item_type, jsonStr, jsonParams)
-        if opapi.__VARIABLESREPRISEDOSSIER__ : time.sleep(0.3)
-        if response:
+        if opapi.__VARIABLESREPRISEDOSSIER__ : time.sleep(0.1)
+        if response and isinstance(response,str):
             if response.isdigit():
                 successList.append(response)
             else:
@@ -276,7 +268,7 @@ def updateMultiples(domain: str, item_type: str, items: dict) -> list[dict]:
     successList: list[dict] = []
     for item in items:
         dataStr = json.dumps(item["data"])
-        paramStr = json.dumps(item["params"])
+        paramStr = json.dumps(item["params"]) if item["params"] else None
         response = update(domain, item_type, dataStr, paramStr)
         if response:
             createdItem = json.loads(response)

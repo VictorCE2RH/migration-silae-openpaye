@@ -223,6 +223,9 @@ def parseEmplois(emp_detailsMap: dict,etab_detailsMap:dict, codeDict: dict):
             codeTravail = extract.codeTravail(code=cCode, motif=motif, typeContrat=tContrat, emploiPart=emploiPart, default_value=90)
             
             opcc = extract.idccToOpcc(emploi["SEM_CodeCCN"])
+            if not opcc:
+                logger.printErr(f"class {emploi["SEM_CLM_Code"]} IDCC {emploi["SEM_CodeCCN"]} not supported")
+                opcc = [emploi["SEM_CodeCCN"]]
             ccnEmploi = extract.emploiCCN(emploi["SEM_CLM_Code"], emploi["SEM_S41_G01_00_014"], ccns=opcc)
             logger.printStat(f"ccn Emploi : {emploi["SEM_CLM_Code"]} {emploi["SEM_S41_G01_00_014"]} {opcc} = {ccnEmploi}")
             statutPro = extract.statutProf(ccnEmploi[2])
