@@ -16,11 +16,11 @@ def _coloredStatement(string,color):
     return f"{color}{string}{Colors.END}"
 
 def SuccessStatement(string):
-    return _coloredStatement(string,Colors.GREEN+Colors.BOLD) 
+    return _coloredStatement(string,Colors.GREEN+Colors.BOLD+" SUCCESS: ") 
 def ErrorStatement(string):
-    return _coloredStatement(string,Colors.RED+Colors.BOLD) 
+    return _coloredStatement(string,Colors.RED+Colors.BOLD+" ERROR: ") 
 def WarningStatement(string):
-    return _coloredStatement(string,Colors.YELLOW+Colors.BOLD)
+    return _coloredStatement(string,Colors.YELLOW+Colors.BOLD+" WARNING: ")
 def ProgressStatement(string):
     return _coloredStatement(string,Colors.CYAN)
 def StatisticStatement(string):

@@ -1,9 +1,11 @@
 import pandas as pd
 import numpy as np
+import statut_pro as sp
 import logger
-import statut_pro
 import requests
 from typing import Optional
+
+IDCC_SHEET = "IDCCvsOPCC"
 
 def contactsColonnes():
     colonnes = [
@@ -43,33 +45,74 @@ def editionCumulColonnes():
         prefix + "TC": "TrancheC",
         prefix + "T2": "Tranche2AFIRCARRCO",
         prefix + "SMICFILLON": "SMICFILLOn",
-        prefix + "RNF": "MontantnetfiscaléxonérationsurHSHC",
         prefix + "CP": "ChargesPatronales",
         prefix + "MTPAS": "RetenueAlasource",
+        # prefix + "RNF": "",
+        prefixShort + "REDUCTIONURSSAF" : "TotalReductionGénéraleUrssaf",
+        prefixShort + "REDUCTIONRETRAITE" : "TotalReductionGénéraleRetraite",
         prefix + "BASECPN1": "BaseCPN1",
         prefix + "BASECPPRISN1": "BaseCPPrisN1",
+        prefix + "BASECPSOLDEN1": "BaseCPSoldeN1",
         prefix + "CPN1": "JoursAcquisN1",
         prefix + "CPPRISN1": "JoursPrisN1",
+        prefix + "SOLDECPN1": "JoursSoldeN1",
         prefix + "BASECPN": "BaseCPN",
         prefix + "BASECPPRISN": "BaseCPPrisN",
+        prefix + "BASECPSOLDEN": "BaseCPSoldeN",
         prefix + "CPN": "JoursAcquisN",
         prefix + "CPPRISN": "JoursPrisN",
+        prefix + "SOLDECPN": "JoursSoldN",
         prefixShort + "RTTACQUIS": "RTTACQUIS",
-        prefixShort + "RTTPRIS": "RTTPRIS"
-    }
+        prefixShort + "RTTPRIS": "RTTPRIS",
+        prefix + "RTTSOLDE": "RTTSOLDE",
+        prefix + "DEFISCALISATIONHEURESSUPP": "MontantnetfiscaléxonérationsurHSHC"
+    }    
+    # HRS : HEURES/JOUR
+    # HRSSUP : HEURES SUPP
+    # BRUT : BRUT
+    # NET : NET A PAYER
+    # NETIMPO : NET IMPOSABLE
+    # ABAT : ABATTEMENT
+    # PMSS : PMSS
+    # TA : TRANCHE A
+    # TB : TRANCHE B
+    # TC : TRANCHE C
+    # T2 : TRANCHE 2 AGIRC-ARRCO
+    # SMICFILLON : SMIC FILLON
+    # CP : CHARGES PATRONALES
+    # RNF : REVENU NET FISCAL
+    # MTPAS : RETENUE A LA SOURCE
+    # CPN : JOURS ACQUIS N
+    # CPPRISN : JOURS PRIS N
+    # SOLDECPN : JOURS SOLDE N
+    # BASECPN : BASE CP N
+    # BASECPPRISN : BASE CP PRIS N
+    # BASECPSOLDEN : BASE CP SOLDE N
+    # CPN1 : JOURS ACQUIS N-1
+    # CPPRISN1 : JOURS PRIS N-1
+    # SOLDECPN1 : JOURS SOLDE N-1
+    # BASECPN1 : BASE CP N-1
+    # BASECPPRISN1 : BASE CP PRIS N-1
+    # BASECPSOLDEN1 : BASE CP SOLDE N-1
+    # $SAL RTTACQUIS : RTT ACQUIS
+    # $SAL RTTPRIS : RTT PRIS
+    # $SAL RTTSOLDE : RTT SOLDE
+    # $SAL REPOSACQUIS : REPOS ACQUIS
+    # $SAL REPOSPRIS : REPOS PRIS
+    # $SAL REPOSSOLDE : REPOS SOLDE
+    # $SAL REDUCTIONURSSAF : Reduction URSSAF
+    # $SAL REDUCTIONRETRAITE : Reduction Retraite
+    # $SAL DEFISCALISATIONHEURESSUPP : Defiscalisation Heures Supp
+    # $SAL SALAIRERETABLI : Salaire Retabli
+    
     # AUTRES COLONNES :
-    # "BaseCPSoldeN"
-    # "BaseCPSoldeN1"
-    # "JoursSoldeN1"
-    # "JoursSoldN"
-    # "RTTSOLDE"
+    # prefixShort + "DEFISCALISATIONHEURESSUPP" : Defiscalisation Heures Supp
+    # prefixShort + "SALAIRERETABLI" : Salaire Retabli
     # "Nom"
     # "Numérodecontrat"
     # "Datededébutdecontrat"
     # "Datededébutdemploi"
     # "SMICheurestravaillées"
-    # "TotalReductionGénéraleUrssaf"
-    # "TotalReductionGénéraleRetraite"
     return colonnes
 
 def excel_vers_dictionnaire_multi_colonnes(
@@ -99,9 +142,9 @@ def excel_vers_dictionnaire_multi_colonnes(
 
     return dictionnaire
 
-def translateCodeV2(fichier_path, nom_feuille, criteres_recherche, defaultline):
+def searchExcel(fichier_path, nom_feuille, criteres_recherche, defaultline=None) -> list[dict]:
     """
-    Recherche des données dans un fichier Excel selon des index de colonnes.
+    Recherche des données dans un fichier Excel selon des index de colonnes. 
 
     Args:
         fichier_path (str): Chemin du fichier Excel
@@ -110,42 +153,41 @@ def translateCodeV2(fichier_path, nom_feuille, criteres_recherche, defaultline):
             Ex: {0: 'valeur1', 2: 'valeur2'}
 
     Returns:
-        DataFrame: Lignes correspondant aux critères
+        list[Dict]: Renvois la liste des lignes correspondant aux criteres ou la ligne par defaut choisi par l'utilisateur
     """
     pd.set_option("display.precision", 0)
+    defaultRes = [defaultline] if defaultline else []
     try:
         df = pd.read_excel(fichier_path, sheet_name=nom_feuille, dtype=str)
         masque = pd.Series(True, index=df.index)
         for index_col, valeur in criteres_recherche.items():
             if index_col < len(df.columns):
-                # print(f"searching {index_col} {valeur}")
-                masque &= df.iloc[:, index_col].astype(
-                    str).str.contains(str(valeur), case=False, na=False)
-                # print(df.iloc[:, index_col][masque])
-                
-                
+                masque &= df.iloc[:, index_col].astype(str).str.contains(str(valeur), case=False, na=False)
+        
         if not masque.any():
-            return defaultline
+            logger.printWarn(f"SearchExcel : criteres {criteres_recherche} Aucune correspondance")
+            return defaultRes
         
-        res = df[masque].to_dict('records')[0]
-        
-        if any(pd.isna(valeur) for valeur in res.values()):
-            logger.printWarn(f"Extraction {nom_feuille} : nan values for current search {criteres_recherche} returning default line ")
-            return defaultline
+        res = df[masque].fillna('').to_dict('records')
+        if not res:
+            logger.printWarn(f"SearchExcel : aucune ligne dans le retour : {df[masque]}")
+            return defaultRes
         
         return res
     except Exception as e:
         print(f"Erreur lors de la recherche: {str(e)}")
-        return defaultline
+        return defaultRes
 
-def translateCode(chemin_fichier: str,code_recherche: any,nom_feuille: str,colonne_source: int = 0,colonnes_cible: list[int] = [1],default_value: Optional[any] = None) -> list[str]:
+def translateCode(chemin_fichier: str,code_recherche: any,nom_feuille: str,colonne_source: int = 0,colonnes_cible: list[int] = None,default_value: Optional[any] = None) -> list[str]:
     pd.set_option("display.precision", 0)
     df = pd.read_excel(chemin_fichier, sheet_name=nom_feuille, dtype=str)
     
     maskedDf = df[df.iloc[:, colonne_source] == str(code_recherche)]
 
+    colCibles = colonnes_cible if colonnes_cible != None else [1]
+    
     resultats = []
-    for colonne_cible in colonnes_cible:
+    for colonne_cible in colCibles:
         res = maskedDf.iloc[:, colonne_cible]
         if not res.empty and res.iloc[0] != np.nan:
             res = res.iloc[0]
@@ -158,7 +200,7 @@ def translateCode(chemin_fichier: str,code_recherche: any,nom_feuille: str,colon
 
     return resultats
 
-def translateCodes(chemin_fichier: str, colonnes: list[str], valeurs: list[str], nom_feuille: str, colonne_cible: int, default_res: Optional[str] = None) -> Optional[int]:
+def translateCodes(chemin_fichier: str, colonnes: list[str], valeurs: list[str], nom_feuille: str, colonne_cible: int, default_res: Optional[int] = None) -> Optional[int]:
     """
     Récupère la valeur dans la colonne cible où les colonnes de conditions ont des valeurs spécifiques.
 
@@ -178,13 +220,24 @@ def translateCodes(chemin_fichier: str, colonnes: list[str], valeurs: list[str],
     for col, val in zip(colonnes, valeurs):
         masque &= df.iloc[:, col] == str(val)
     resultat = df.iloc[masque.values, colonne_cible]
-    resultat = df.iloc[masque.values, colonne_cible]
-
-    resultat = df.iloc[masque.values, colonne_cible]
 
     return int(resultat.iloc[0]) if not resultat.empty else default_res
 
 _tradFile = r"C:\Users\e2rh0\Victor_E2RH\workspace\open-paye-migration\data\in\traduction_code_silae_openpaye.xlsx"
+
+def formeJuridique(code: str):
+    if len(code) != 4:
+        logger.printWarn(f"Forme Juridique: Code silae vide")
+        return 1
+    units = list(code)
+    if units[0] in ['0','1','2']:
+        return 3
+    if units[0] in ['3','4','5','6','7','8','E']:
+        return 1
+    if units[0] == '9':
+        return 2
+    logger.printWarn(f"Forme Juridique: Aucune correspondance {code}")
+    return 1
 
 def codeTravail(code: str = None, motif: str = None, typeContrat: int = None, emploiPart: str = None, default_value=None):
     colIndex = []
@@ -203,9 +256,9 @@ def codeTravail(code: str = None, motif: str = None, typeContrat: int = None, em
     if emploiPart and emploiPart[:2].isdigit():
         colIndex.append(4)
         values.append(emploiPart)
-
-    default = str(int(code)) if code and int(code) in [1,2,3,29,32,89] else default_value
-
+        
+    default = int(code) if code and int(code) in [1,2,3,29,32,89] else default_value
+    
     return translateCodes(
         _tradFile,
         colIndex,
@@ -231,26 +284,33 @@ def statutProf(codeTravail):
         default_value=90,
     )[0])
 
-def emploiCCN(classification:str, statutPro, ccns):
+def emploiCCN(classification:str, statutPro:str, ccn:int):
     criteres = {
         0: classification,
         1: statutPro,
     }
-    default = {
-        "sCode": classification,
-        "StatutProfessionnel": statutPro,
-        "OPCC": ccns[0],
-        "Code": 9999,
-        "Statut": statut_pro.PAS_STATUT,
-        "Libellé": "-"
-    }
+    default = [ccn,9999,sp.PAS_STATUT]
+    if classification == '':
+        logger.printWarn(f"ATTENTION: classification non renseignée sur le contrat")
+        return default
+    rows = searchExcel(fichier_path=_tradFile, nom_feuille="emploiCCN", criteres_recherche=criteres, defaultline=None)
+    if len(rows) == 0:
+        criteres = {
+            0: classification
+        }
+        rows = searchExcel(fichier_path=_tradFile, nom_feuille="emploiCCN", criteres_recherche=criteres, defaultline=None)
+        return default
+    res = None
+    for row in rows:
+        if row['code silae'] == classification and row['Statut Professionnel'] == statutPro:
+            res = row
+    if not res:
+        logger.printWarn(f"La ligne ne cr")
+    opcc = int(res["OPCC"])
+    code = int(res["Code"]) if res["Code"] != '' else 9999
+    statut = res["Statut"] if res["Statut"] != '' else sp.PAS_STATUT
     
-    if classification == '' or statutPro == '':
-        return [int(default["OPCC"]), int(default["Code"]),default["Statut"]]
-    
-    res = translateCodeV2(fichier_path=_tradFile, nom_feuille="emploiCCN", criteres_recherche=criteres, defaultline=default)
-    
-    return [int(res["OPCC"]), int(res["Code"]), res["Statut"]]
+    return [opcc, code, statut]
 
 def civilite(civilite):
     if isinstance(civilite,str) and civilite.isdigit():
@@ -260,15 +320,40 @@ def civilite(civilite):
         return int(res)
     return None
 
-def idccToOpcc(idcc):
-    if isinstance(idcc, str) and idcc.isdigit():
-        idcc = int(idcc)
-    res = translateCode(
-        chemin_fichier=_tradFile, code_recherche=idcc, nom_feuille="IDCCvsOPCC"
-    )
-    if isinstance(res, list) and res[0].isdigit():
-        return [int(r) for r in res]
-    return None
+def _existInTradFile(data,sheet_name):
+    criteres = {
+        0: data
+    }
+    rows = searchExcel(fichier_path=_tradFile, nom_feuille=sheet_name, criteres_recherche=criteres, defaultline=None)
+
+    return len(rows) != 0
+
+def translateToOpcc(ccn, idcc):
+    if idcc == '':
+        return None
+    idccStr = str(idcc).zfill(4)
+    ccnSupported = _existInTradFile(ccn, IDCC_SHEET)
+    if not ccnSupported:
+        logger.printWarn(f"La CCN {ccn} n'est pas supporté dans cette version du fichier")
+    criteres = {
+        1: idccStr
+    }
+    rows = searchExcel(fichier_path=_tradFile, nom_feuille=IDCC_SHEET, criteres_recherche=criteres, defaultline=None)
+    if len(rows) == 0:
+        return None
+    for row in rows:
+        if row["ccn"] == ccn: 
+            return int(row["opcc"])
+    logger.printWarn(f"aucun code correspondant avec silae code {ccn} {rows}")
+    return rows[0]["opcc"]
+
+def opccToIdcc(opcc):
+    if isinstance(opcc, str) and opcc.isdigit():
+        opcc = int(opcc)
+    res = translateCode(chemin_fichier=_tradFile, code_recherche=opcc,colonne_source=1,colonnes_cible=[0], nom_feuille="IDCCvsOPCC")[0]
+    if isinstance(res,str) and res.isdigit():
+        return int(res)
+    return res
 
 def qualite(code: str, default: str):
     return translateCode(
@@ -304,6 +389,24 @@ def _normalize_code_risque(code):
     if len(code) >= 3 and code[2] != '.':
         code = f"{code[:2]}.{code[2:]}"
     return code
+
+def nomNatureCotisation(codeNature:str):
+    criteres = {
+        0: codeNature,
+    }
+    res = searchExcel(fichier_path=_tradFile, nom_feuille="cotisation_nature", criteres_recherche=criteres, defaultline=None)[0]
+    return res["Nom"]
+
+def paiementPeriodicite(code:int):
+    codes = ["Mensuelle","Trimestrielle","Annuelle","Semestrielle"]
+    if code >= len(codes):
+        return None
+    return codes[code]
+
+def typePrelevement(code:int):
+    # codes = ["Chèque","Virement", "Télépaiement"]
+    codes = [None, "Chèque","Virement", "Prélèvement"]
+    return codes[code]
 
 def getTauxAT(code_risque, annee,recursed=False):
     """

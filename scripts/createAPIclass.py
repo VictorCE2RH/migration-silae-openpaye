@@ -1,6 +1,6 @@
 
 themes = [
-    "Absences", "BulletinsPaies", "Contrats", "ContratSortant", "Dossiers",
+    "Absences", "BulletinsPaies", "CaisseCotisations","Contrats", "ContratSortant", "Dossiers",
     "Editions", "Etablissements", "HeuresSupplementaires", "Options", 
     "Primes", "Salaries", "SoldeToutComptes", "Variables", "VariablesBulletins", "VariablesRepriseDossier"
 ]

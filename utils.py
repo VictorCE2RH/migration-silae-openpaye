@@ -7,6 +7,7 @@ import unicodedata
 import re
 import os
 import pandas as pd
+from difflib import SequenceMatcher
 from collections import defaultdict
 from datetime import datetime, date, timedelta
 from typing import Mapping
@@ -256,6 +257,22 @@ def dictToCSVFile(data_dict, output_file):
         writer.writerows(zip(*data_dict.values()))
     return data_dict
 
+def dict_to_excel(data: dict, output_path: str, primary_key_name:str):
+    """
+    Convert a nested dictionary of lists to CSV/Excel file.
+
+    Args:
+        data: Dictionary where each value is a list of dictionaries
+        output_path: Path for output file (.csv or .xlsx)
+        separator: Delimiter for CSV format
+    """
+    rows = [{ primary_key_name: key, **item} for key, items in data.items() for item in items]
+    df = pd.DataFrame(rows)
+    df = df.astype(str)
+    # df = df.apply(lambda x: "'" + x)
+    df.to_excel(output_path, index=False)
+    return rows
+
 def openCumulsWebPages(codesDict:dict):
     first = True
     for _, id in codesDict.items():
@@ -272,7 +289,6 @@ def extract_decimal(text):
     if match:
         number = match.group().replace(',','.')
         return float(number)
-    logger.printWarn(f"No decimal found in text : {text}")
     return None
 
 def calculateJour(nbHeuresJour): 
@@ -340,12 +356,64 @@ def create_excel_file(data, output_file, sheet_name='Sheet1'):
         logger.printErr(f"Erreur lors de la création du fichier Excel: {e}")
 
 def migrationLog(createdItem, type, suffix_name):
-    _logFile = r'.\data\out'
+    _logFile = r'.\data\out\migration_log'
     _logFile = f"{_logFile}\\export_log_{suffix_name}.xlsx"
     create_excel_file(createdItem,_logFile,type)
 
-def removeDuplicates(items: list[str]) -> list[str]:
+def clearList(items: list[str]) -> list[str]:
+    # remove blanks 
+    items = [item for item in items if item != '']
+
     return list(dict.fromkeys(items))
 
 def valid(statusCode:int) -> bool:
     return (statusCode in [200,201])
+
+def jaccard_similarity(text1: str, text2: str) -> float:
+    """
+    Calcule la similarité de Jaccard entre deux textes.
+    Retourne un score entre 0 (aucune similarité) et 1 (identique)
+    """
+    # Conversion en ensembles de mots (après nettoyage)
+    set1 = set(text1.lower().split())
+    set2 = set(text2.lower().split())
+    
+    # Calcul de l'intersection et de l'union
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    
+    # Protection division par 0
+    if union == 0:
+        return 0
+        
+    return intersection / union
+
+def similarity_score(a: str, b: str) -> float:
+    return SequenceMatcher(None, a, b).ratio()
+
+def findSimilarText(target: str, text_list: list[str], threshold: float = 0.8) -> list[tuple[str, float]]:
+    similar = []
+    for text in text_list:
+        score = similarity_score(target, text)
+        if score >= threshold:
+            similar.append((text, score))
+    return sorted(similar, key=lambda x: x[1], reverse=True)
+
+def isSimilarText(text_a: str, text_b: str, threshold: float = 0.8) -> list[tuple[str, float]]:
+    score = similarity_score(text_a, text_b)
+    success =  score >= threshold
+    if success: 
+        print(f"A: {text_a}")
+        print(f"B: {text_b}")
+        logger.printSuccess(f"score: {score}")
+    return success
+
+
+def getPlaceholderMail(domain):
+    DomainMailMap = {
+        "E2RH": None,
+        "PAME": "valerie@pame.fr",
+    }
+    if domain not in DomainMailMap.keys():
+        raise Exception(f"add a placeholder if needed or \"{domain}\": None,")
+    return DomainMailMap[domain]

@@ -13,6 +13,7 @@ URL_DOSSIERS = api_openpaye + "/dossiers"
 __ABSENCES__ = "absences"
 __BULLETINSPAIES__ = "bulletinspaies"
 __CONTRATS__ = "contrats"
+__CAISSECOTISATIONS__ = "caisseCotisations"
 __CONTRATSORTANT__ = "contratsortant"
 __DOSSIERS__ = "dossiers"
 __EDITIONS__ = "editions"
@@ -73,10 +74,10 @@ class BaseAPI:
         if valid(response.status_code):
             return response.text, response.status_code
         if response.status_code == 409:
-            logger.printWarn(f"\nWarning {response.url} response : {response.status_code} - {response.text}\n")
-            return None, response.status_code
-        logger.printErr(f"\nError {response.url} response : {response.status_code} - {response.text} {response.headers} \n")
-        return None, response.status_code
+            logger.printWarn(f"Warning {response.url} response : {response.status_code} - {response.text}")
+            return response.text, response.status_code
+        logger.printErr(f"Error {response.url} response : {response.status_code} - {response.text}")
+        return response.text, response.status_code
 
 class DossiersEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
@@ -127,7 +128,6 @@ class DossiersEP(BaseAPI):
         if prints: print(f"page {num+1}/{total_pages}")
         return dossiers, total_pages, total_dossiers, status_code
 
-
 class EtablissementsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__ETABLISSEMENTS__, auth_key)
@@ -165,21 +165,29 @@ class EtablissementsEP(BaseAPI):
         print(f"page {num+1}/{total_pages}")
         return etablissements, total_pages, total_etablissements, status_code
 
-
 class AbsencesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__ABSENCES__, auth_key)
-
 
 class BulletinsPaiesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__BULLETINSPAIES__, auth_key)
 
+class CaisseCotisationsEP(BaseAPI):
+    def __init__(self, auth_key: tuple[str,str]):
+        super().__init__(__CAISSECOTISATIONS__, auth_key)
 
 class ContratsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__CONTRATS__, auth_key)
 
+    # def create(self, data, params = None):
+    #     response, status_code = super().create(data, params)
+    #     if not valid(status_code):
+    #         if response == "Le code CCN/IDCC n'est pas valide":
+    #             logger.printWarn(f"Retry without informations : ccn {data["ccn"]}")
+    #             data["ccn"] = None
+    #             return super().create(data,params)
 
 class ContratSortantEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
@@ -193,45 +201,38 @@ class HeuresSupplementairesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__HEURESSUPPLEMENTAIRES__, auth_key)
 
-
 class OptionsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__OPTIONS__, auth_key)
-
 
 class PrimesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__PRIMES__, auth_key)
 
-
 class SalariesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__SALARIES__, auth_key)
-
 
 class SoldeToutComptesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__SOLDETOUTCOMPTES__, auth_key)
 
-
 class VariablesEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__VARIABLES__, auth_key)
-
 
 class VariablesBulletinsEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__VARIABLESBULLETINS__, auth_key)
 
-
 class VariablesRepriseDossierEP(BaseAPI):
     def __init__(self, auth_key: tuple[str, str]):
         super().__init__(__VARIABLESREPRISEDOSSIER__, auth_key)
 
-
 api_map = {
     __ABSENCES__: AbsencesEP,
     __BULLETINSPAIES__: BulletinsPaiesEP,
+    __CAISSECOTISATIONS__: CaisseCotisationsEP,
     __CONTRATS__: ContratsEP,
     __CONTRATSORTANT__: ContratSortantEP,
     __DOSSIERS__: DossiersEP,
@@ -244,5 +245,5 @@ api_map = {
     __SOLDETOUTCOMPTES__: SoldeToutComptesEP,
     __VARIABLES__: VariablesEP,
     __VARIABLESBULLETINS__: VariablesBulletinsEP,
-    __VARIABLESREPRISEDOSSIER__: VariablesRepriseDossierEP
+    __VARIABLESREPRISEDOSSIER__: VariablesRepriseDossierEP,
 }

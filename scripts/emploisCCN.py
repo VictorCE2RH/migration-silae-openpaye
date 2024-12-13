@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 import sys
 import os
+from datetime import datetime
+
 # Ajoute le dossier parent au PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils
@@ -19,7 +21,7 @@ def get_page_content(url):
         return None
 
 def parse_html_content(html_content):
-    """Parse le contenu HTML et extrait les données des spans"""
+    """Parse le ²contenu HTML et extrait les données des spans"""
     soup = BeautifulSoup(html_content, 'html.parser')
     data = []
     
@@ -37,7 +39,7 @@ def parse_html_content(html_content):
             })
     
     return data
-
+    
 
 def main():
     # URL de la page
@@ -63,7 +65,9 @@ def main():
     logger.printStat(f"Collected {len(data)} elements")
     # Crée le fichier Excel
     logger.printProgress("Creating excel file")
-    outpath = r'.\data\out\emplois_conventionnels.xlsx'
+    timestamp = datetime.now().strftime("%Y-%m-%d")
+    outpath = r'.\data\out'
+    outpath = f"{outpath}\\{timestamp}_emplois_conventionnels.xlsx"
     utils.create_excel_file(data,outpath)
     logger.printProgress(f"Created File at {outpath} ")
 

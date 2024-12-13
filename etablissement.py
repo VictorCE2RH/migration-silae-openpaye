@@ -35,7 +35,7 @@ class GestionCongesPayes:
 class Etablissment:
     code: str
     raison_sociale: str
-    etablissement_principal: bool
+    main: bool
     siret: str
     adresse: Adresse
     forme_juridique: int

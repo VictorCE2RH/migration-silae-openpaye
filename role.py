@@ -54,8 +54,6 @@ def associer_role(qualite_texte: str, mapping: dict[str, RoleOP] = role_mapping)
         if key in qualite_texte:
             return mapping[key]
 
-    print(
-        f"QUALITEE : AUCUNE CORRESPONDANCE, attribution du role AUTRE\n {qualite_texte} (clé={key}). ajoutez une correspondance si nécessaire dans role.py"
-    )
+    print(f"QUALITEE : AUCUNE CORRESPONDANCE, attribution du role AUTRE\n {qualite_texte} (clé={key}). ajoutez une correspondance si nécessaire dans role.py")
     # Si aucune correspondance n'a été trouvée, renvoyer RoleOP.Autre
     return RoleOP.Autre

@@ -18,13 +18,21 @@ class:
 	@python $(SCRIPT_DIR)\createAPIclass.py
 	@echo.
 
-emplois:
+scrapEmploiCCN:
 	@echo - Creation fichier regroupement emplois CCN depuis Documentation Openpaye : 
 	@python $(SCRIPT_DIR)\emploisCCN.py
 
 update:
 	@echo - Import version locale traduction des emplois CCN:
 	@python $(SCRIPT_DIR)\importEmploiTradFile.py
+
+idccToOpcc:
+	@echo - Execution de la traduction IDCC OPCC: 
+	@python $(SCRIPT_DIR)\idccToOpcc.py
+
+test:
+	@echo - Execution du fichier de test: 
+	@python $(SCRIPT_DIR)\test.py
 
 debug-migrate: debug-delete-before-migrate
 	@echo - Lancement de la migration en mode debug de $(filter-out $@,$(MAKECMDGOALS)):
@@ -41,13 +49,15 @@ migrate: delete_before_migrate
 
 delete_before_migrate:
 	@echo - Suppression des numeros de dossiers avant la migration : 
-	@python .\typerscript.py delete $(word 1,$(filter-out migrate,$(MAKECMDGOALS))) dossiers $(wordlist 2,$(words $(MAKECMDGOALS)),$(filter-out migrate,$(MAKECMDGOALS))) --iscode --f
+	@python .\typerscript.py delete $(word 1,$(filter-out migrate,$(MAKECMDGOALS))) dossiers $(wordlist 2,$(words $(MAKECMDGOALS)),$(filter-out migrate,$(MAKECMDGOALS))) --iscode
 
 delete:
 	@echo - Suppression d'item : 
 	@python .\typerscript.py delete $(filter-out $@,$(MAKECMDGOALS)) --iscode
 
-
+cumuls: 
+	@echo - Lancement de la migration de $(filter-out $@,$(MAKECMDGOALS)):
+	@python .\typerscript.py updatecumuls $(filter-out $@,$(MAKECMDGOALS))
 
 %:
 	@:

@@ -1,6 +1,6 @@
 .pytest*
 __pycache__
-data/out/*
+data/out/**
 .env
 script.py
 .venv

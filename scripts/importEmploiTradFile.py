@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Optional, Tuple
-
+from pathlib import Path
 import sys
 import os
 # Ajoute le dossier parent au PYTHONPATH
@@ -15,7 +15,7 @@ def setup_argparser():
     parser.add_argument('--ignoreCCN',nargs='+', help='Codes CCNs à ignorer (séparés par un espace)')
     return parser
 
-def reorder_excel_columns(input_file: str, output_file: str, column_order: list, ignored_ccns:list[str]) -> pd.DataFrame:
+def reorder_excel_columns(input_file: Path, output_file: Path, column_order: list, ignored_ccns:list[str]) -> pd.DataFrame:
     """
     Réorganise les colonnes d'un fichier Excel selon l'ordre spécifié.
     """
@@ -125,9 +125,9 @@ if __name__ == "__main__":
     parser = setup_argparser()
     args = parser.parse_args()
     # Configuration des chemins de fichiers
-    fichier_entree = r"C:\Users\e2rh0\Victor_E2RH\E2RH\OPENPAYE\Classifications\Liste traduction classification Silae vers OP v2.xlsx"
-    fichier_sortie = r"C:\Users\e2rh0\Victor_E2RH\workspace\open-paye-migration\data\out\traduction_emploi_ordonnee.xlsx"
-    fichier_test = r"C:\Users\e2rh0\Victor_E2RH\workspace\open-paye-migration\data\in\traduction_code_silae_openpaye.xlsx"
+    fichier_entree = Path("C:/Users/e2rh0/Victor_E2RH/E2RH/OPENPAYE/classifications/Liste_traduction_classification_Silae_vers_OP_v3.xlsx")
+    fichier_sortie = Path("C:/Users/e2rh0/Victor_E2RH/workspace/open-paye-migration/data/out/traduction_emploi_ordonnee.xlsx")
+    fichier_test = Path("C:/Users/e2rh0/Victor_E2RH/workspace/open-paye-migration/data/in/traduction_code_silae_openpaye.xlsx")
 
     # Nouvel ordre des colonnes
     nouvel_ordre = [
