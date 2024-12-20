@@ -17,7 +17,7 @@ def get_page_content(url):
         response.raise_for_status()  # Lève une exception si la requête échoue
         return response.text
     except requests.RequestException as e:
-        logger.printErr(f"Erreur lors de la récupération de la page: {e}")
+        logger.error(f"Erreur lors de la récupération de la page: {e}")
         return None
 
 def parse_html_content(html_content):
@@ -45,14 +45,14 @@ def main():
     # URL de la page
     url = "https://api.openpaye.co/Listes?type=Emploi%20Conventionnel"
     
-    logger.printProgress(f"Requesting {url}")
+    logger.progress(f"Requesting {url}")
     # Récupère le contenu de la page
     html_content = get_page_content(url)
     if html_content is None:
-        logger.printWarn("html content null")
+        logger.warning("html content null")
         return
     
-    logger.printProgress(f"Parsing {url}")
+    logger.progress(f"Parsing {url}")
     
     # Parse le contenu HTML
     data = parse_html_content(html_content)
@@ -62,15 +62,15 @@ def main():
         logger.WarningStatement("Aucune donnée trouvée dans la page")
         return
     
-    logger.printStat(f"Collected {len(data)} elements")
+    logger.statistic(f"Collected {len(data)} elements")
     # Crée le fichier Excel
-    logger.printProgress("Creating excel file")
+    logger.progress("Creating excel file")
     timestamp = datetime.now().strftime("%Y-%m-%d")
     outpath = r'.\data\out'
     outpath = f"{outpath}\\{timestamp}_emplois_conventionnels.xlsx"
     utils.create_excel_file(data,outpath)
-    logger.printProgress(f"Created File at {outpath} ")
+    logger.progress(f"Created File at {outpath} ")
 
 if __name__ == "__main__":
     main()
-    logger.printSuccess("FIN")
+    logger.success("FIN")

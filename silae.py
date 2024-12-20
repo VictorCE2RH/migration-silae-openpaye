@@ -15,9 +15,9 @@ def getDomainHeader(domain: str):
 def ping():
     response = requests.get(f"{api_E2RH}/ping")
     if response.status_code != 200:
-        print(f" Erreur ping serveur {api_E2RH} : {response.status_code} {response.text}")
+        logger.log(f" Erreur ping serveur {api_E2RH} : {response.status_code} {response.text}")
     else:
-        print("Connecté à l'API E2RH !")
+        logger.log("Connecté à l'API E2RH !")
         return True
     
     return False
@@ -43,7 +43,7 @@ def silaeGet(url,headers,data=None,params=None) -> tuple[any,int]:
             if respJson.get("errors"):
                 raise Exception(f"{response.status_code} - {respJson.get("errors",response.text)}")
     except Exception as e:
-        logger.printErr(f" API E2RH: Exception raised : {e} ")
+        logger.error(f" API E2RH: Exception raised : {e} ")
         return (None, 500)
         
 class Dossier:
@@ -57,7 +57,7 @@ class Dossier:
             self.siret = fromJson.get("siret")
             self.raisonSociale = fromJson.get("raisonSociale")
         except Exception as e:
-            print(f"Dossier Creation from json not possible : {e}")
+            logger.log(f"Dossier Creation from json not possible : {e}")
 
 def _getDossiersList(domain):
     dossiers = []
@@ -72,14 +72,14 @@ def _getDossiersList(domain):
 
 def getCcnForNums(numeros:list[str],headers):
     url = api_E2RH + "/extras/ccns"
-    print(f"url : {url}")
+    logger.log(f"url : {url}")
     response = requests.get(url, headers=headers,data=json.dumps(numeros))
     if utils.valid(response.status_code):
         ("liste ccns récupérées avec succès depuis l'API Silae.")
         collectionCCN = json.loads(response.text)
         return collectionCCN["Data"]
     else:
-        logger.printErr(f"Erreur lors de la récupération des données: {response.text}")
+        logger.error(f"Erreur lors de la récupération des données: {response.text}")
         return None
 
 def filtreDossiers(dossiers):
@@ -100,7 +100,7 @@ def _getContactFromNum(numero, headers):
     
     contact = silae_data.get("listeUtilisateursDossierPaie")
     if contact:
-        print(f"Numero : {numero}  collab : {contact.get("prenom")} {contact.get("nom")}")
+        logger.log(f"Numero : {numero}  collab : {contact.get("prenom")} {contact.get("nom")}")
         return contact
     return None
 def getDossiers(domain: str) -> dict[str, Dossier]:
@@ -108,7 +108,7 @@ def getDossiers(domain: str) -> dict[str, Dossier]:
     dossiers = filtreDossiers(silae_data)
     dossierMap: dict[str, Dossier] = {}
     if not dossiers:
-        print("No folders Found (filtered)")
+        logger.log("No folders Found (filtered)")
         exit(1)
 
     for dossier in dossiers:
@@ -127,7 +127,7 @@ def getDossiersDetails(domain: str, dossiersMap:dict[str, Dossier]):
     return res
 
 def getInfosEtablissements(domain: str, dossiersMap: dict[str, Dossier]):
-    print(f"Export des etablissements de chaque dossier")
+    logger.log(f"Export des etablissements de chaque dossier")
     res:dict = {}
     for numero, dossier in dossiersMap.items():
         url = f"{api_E2RH}/dossiers/{numero}/etablissements"
@@ -136,38 +136,40 @@ def getInfosEtablissements(domain: str, dossiersMap: dict[str, Dossier]):
             if response.status_code == 200:
                 etabJson = response.json().get("Data")
                 res[numero] = etabJson
-                print(f"Dossier {numero} Etablissement(s) récupéré(s)")
+                logger.log(f"Dossier {numero} Etablissement(s) récupéré(s)")
             else:
-                print(f"Dossier : {dossier.numero} Erreur récupération établissement {response.text}")
+                logger.error(f"Dossier : {dossier.numero} Erreur récupération établissement {response.text}")
         except Exception as e:
-            logger.printErr(f"API E2RH : getInfosEtablissements : exception raised {e}")
+            logger.error(f"API E2RH : getInfosEtablissements : exception raised {e}")
             raise e
     return res
 
 def getEtablissementDetails(domain: str, etabMap: dict):
-    print(f"Export des détails d'etablissement de chaque dossier")
+    logger.log(f"Export des détails d'etablissement de chaque dossier")
     etabDetailsMap = dict()
     for numero, etabs in etabMap.items():
         etabDetailsMap[numero] = dict()
+        i = 1
         for etab in etabs['informationsEtablissements']:
             nomInterne = etab["nomInterne"]
+            i += 1
             url = f"{api_E2RH}/dossiers/{numero}/etablissements/{nomInterne}/details"
             try:
                 response = requests.get(url, headers=getDomainHeader(domain))
                 if response.status_code == 200:
                     etabJson = response.json().get("Data")
-                    print(f"Dossier : {numero} Etablissement {nomInterne}, détails récupérés")
+                    logger.log(f"Dossier : {numero} Etablissement {nomInterne}, détails récupérés")
                     etabDetailsMap[numero][nomInterne] = etabJson["reponsesInfosPaie"]
                 else:
-                    print(f"Dossier : {numero} Etablissement {nomInterne}, Erreur récupération établissement {response.text}")
+                    logger.log(f"Dossier : {numero} Etablissement {nomInterne}, Erreur récupération établissement {response.text}")
             except Exception as e:
-                print(f"{url} : exception raised {e}")
+                logger.log(f"{url} : exception raised {e}")
 
     return etabDetailsMap
 
 def getInfosSalaries(domain: str, codeDict: dict):
     res = dict()
-    print(f"Export des informations salariés pour chaque documents")
+    logger.log(f"Export des informations salariés pour chaque documents")
     for numero, _ in codeDict.items():
         url = f"{api_E2RH}/dossiers/{numero}/salaries"
         try: 
@@ -176,7 +178,7 @@ def getInfosSalaries(domain: str, codeDict: dict):
                 respjson = response.json().get("Data")
                 res[numero] = dict()
                 matricules = [matricule["matriculeSalarie"] for matricule in respjson["listeSalariesInformations"]]
-                print(f"Dossier {numero} Récupération des détails de {len(matricules)} salariés")
+                logger.log(f"Dossier {numero} Récupération des détails de {len(matricules)} salariés")
                 for mat in matricules:
                     url = f"{api_E2RH}/dossiers/{numero}/salaries/{mat}/details"
                     response = requests.get(url, headers=getDomainHeader(domain))
@@ -184,57 +186,58 @@ def getInfosSalaries(domain: str, codeDict: dict):
                         respjson = response.json().get("Data")
                         res[numero][mat] = respjson
                     else:
-                        print(response.text)
+                        logger.log(response.text)
         except Exception as e:
-            print(f"Exception levée : {e}")
+            logger.log(f"Exception levée : {e}")
     return res
 
-def getInfosEmplois(domain:str,sal_detailsMap: dict):
+def getInfosEmplois(domain:str,sal_DetailsMap: dict):
     res = dict()
-    print(f"Export des informations emplois pour chaque documents")
-    for numero, salaries in sal_detailsMap.items():
+    logger.log(f"Export des informations emplois pour chaque documents")
+    nbEmplois = 0
+    for numero, salaries in sal_DetailsMap.items():
         res[numero] = dict()
-        print(f"Dossier {numero} Récupération des détails de {len(salaries)} contrats")
+        logger.log(f"Dossier {numero} Récupération des détails de {len(salaries)} contrats")
         for matricule, _ in salaries.items():
             url = f"{api_E2RH}/dossiers/{numero}/salaries/{matricule}/emplois"
             try: 
                 response = requests.get(url, headers=getDomainHeader(domain))
-                if response.status_code == 200:
+                if utils.valid(response.status_code):
                     respjson = response.json().get("Data")
                     res[numero][matricule] = respjson
+                    nbEmplois += len(respjson)
                 else:
-                    print(response.text)
-
+                    logger.log(response.text)
             except Exception as e:
-                print(f"Exception levée : {e}")
-    print(f" {len(res)} récupérés ")
+                logger.log(f"Exception levée : {e}")
+    logger.log(f"Dossier {numero} {nbEmplois} emplois récupérés")
     return res
 
-def getCumulsContrats(domain:str,codeDict: dict[str,int],forceDtReprise:datetime = None):
+def getCumulsContrats(domain:str,codesDict: dict[str,int],forceDtReprise:datetime = None):
     res:dict[str,dict[str,str]] = {}
     headers = getDomainHeader(domain)
     headers["Content-Type"] = "application/json"
     # Calcul des dates periode de cumuls (indiquer le mois précédent du 1er au dernier jour)
     periode = datetime.today()
     if datetime.today() and periode.month == 1:
-        logger.printWarn(f"Calcul des cumuls non requis pour Janvier")
+        logger.warning(f"Calcul des cumuls non requis pour Janvier")
     periode = datetime.today().replace(day=1) - timedelta(days=1)
     dtDebStr = periode.replace(day=1).strftime("%d/%m/%Y") # 1er jour mois précedent
     dtFinStr = periode.strftime("%d/%m/%Y") # dernier jour mois précédent 
     dtReprise = periode + timedelta(days=1)
     if forceDtReprise:
         dtReprise = forceDtReprise
-    logger.printStat(f"Cumuls : debut {dtDebStr} fin {dtFinStr} reprise {dtReprise.strftime("%d/%m/%Y")}")
+    logger.statistic(f"Cumuls : debut {dtDebStr} fin {dtFinStr} reprise {dtReprise.strftime("%d/%m/%Y")}")
     payload = {
         "code_edition": "EXP OPENPAYE CUMUL",
         "periode_debut": dtDebStr,
         "periode_fin": dtFinStr,
     }
 
-    for numero, _ in codeDict.items():
+    for numero, _ in codesDict.items():
         url = f"{api_E2RH}/dossiers/{numero}/editions/cumuls"
         try: 
-            print(f" Cumuls Dossier {numero}, Récupération des données en cours...")
+            logger.log(f" Cumuls Dossier {numero}, Récupération des données en cours...")
             response = requests.get(url, headers=headers,json=payload)
             if utils.valid(response.status_code):
                 respjson = response.json().get("Data")
@@ -242,10 +245,10 @@ def getCumulsContrats(domain:str,codeDict: dict[str,int],forceDtReprise:datetime
                 res[numero]["DateReprise"] = dtReprise.strftime("%d/%m/%Y")
                 res[numero]["Cumul"] = respjson
             else:
-                print(response.text)
+                logger.error(response.text)
         except Exception as e:
-            print(f"Exception levée : {e}")
-    return res 
+            logger.error(f"Exception levée : {e}")
+    return res
 
 def getOrganismesList(domain:str, codeDict: dict[str,int]): 
     res:dict[str,list[dict]] = {}
@@ -261,14 +264,14 @@ def getOrganismesList(domain:str, codeDict: dict[str,int]):
                 if items:
                     for _, item in enumerate(items):
                         if not item["nomInterneEtablissement"] or item["nomInterneEtablissement"] == "":
-                            logger.printWarn(f"dossier {numero} : organisme {item["codeOrganisme"]} n'est pas rattaché à un etablissement")
+                            logger.warning(f"dossier {numero} : organisme {item["codeOrganisme"]} n'est pas rattaché à un etablissement")
                             continue
                         res[numero].append(item)
-                print(f"Dossier {numero} : {len(items)} organismes récupérés")
+                logger.log(f"Dossier {numero} : {len(items)} organismes récupérés")
             else:
                 raise Exception(response.text)
         except Exception as e:
-            logger.printErr(f"Silae get organismes : error {e}")
+            logger.error(f"Silae get organismes : error {e}")
     return res
     
 def getCCNListFromIDCC(idcc:str) -> list[dict]:
@@ -278,6 +281,6 @@ def getCCNListFromIDCC(idcc:str) -> list[dict]:
         ccnList = response.json().get("Data").get("ccn")
         return ccnList
     except Exception as e:
-        logger.printErr(f"Silae get CCN from IDCC : error {e} {response.status_code}")
+        logger.error(f"Silae get CCN from IDCC : error {e} {response.status_code}")
     
     return []

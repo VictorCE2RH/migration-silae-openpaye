@@ -22,7 +22,7 @@ def setup_argparser():
 def collectCCNS(domain:str, numeros:list[str]) -> dict[str,dict]:
     headers = silae.getDomainHeader(domain)
     collectionCCN = silae.getCcnForNums(numeros, headers=headers)    
-    print(collectionCCN)
+    logger.log(collectionCCN)
     
     return collectionCCN
 
@@ -41,13 +41,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     domain = args.domain
     numeros = args.numeros
-    print(domain)
-    print(numeros)
+    logger.log(domain)
+    logger.log(numeros)
     # Configuration des chemins de fichiers
     fichier_sortie = r".\data\out"
     fichier_sortie = f"{fichier_sortie}\\export_ccn_{args.domain}.csv"
 
     items = collectCCNS(args.domain, args.numeros)
     items = transformdict(items)
-    print(items)
+    logger.log(items)
     utils.dictToCSVFile(items, fichier_sortie)

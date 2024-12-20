@@ -6,6 +6,7 @@ import logger
 import unicodedata
 import re
 import os
+import logger
 import pandas as pd
 from difflib import SequenceMatcher
 from collections import defaultdict
@@ -22,7 +23,7 @@ def objectEncoderJson(objet):
             objet, default=lambda o: o.__dict__, ensure_ascii=False, indent=4
         )
     except TypeError as e:
-        print(f"Erreur lors de l'encodage en JSON: {e}")
+        logger.log(f"Erreur lors de l'encodage en JSON: {e}")
         return None
 
 def formatJson(data: str | dict, spaces: int = 4):
@@ -56,7 +57,7 @@ def getIdForNum(items:dict, numList: list) -> list:
                 found = True
                 break
         if found == False:
-            logger.printWarn(f"code {num} inexistant.")
+            logger.warning(f"code {num} inexistant.")
     return res
 
 # Fonction utilitaire pour charger les données du fichier
@@ -87,16 +88,16 @@ def del_none(d):
     return d  # For convenience
 
 def filterEmptyResData(res: list):
-    print("Filtering out empty string list elements")
+    logger.log("Filtering out empty string list elements")
     for i in range(len(res)):
         for key, data in res[i]["data"].items():
             if isinstance(data, dict):
                 for subKey, subData in data.items():
                     if isinstance(subData, str) and subData == '':
-                        # print(f"remove empty sub {key} {subKey} {subData}")
+                        #logger.print(f"remove empty sub {key} {subKey} {subData}")
                         res[i]["data"][key][subKey] = None
             if isinstance(data, str) and data == '':
-                # print(f"remove empty {key} {data}")
+                #logger.print(f"remove empty {key} {data}")
                 res[i]["data"][key] = None
     return res
 
@@ -273,10 +274,16 @@ def dict_to_excel(data: dict, output_path: str, primary_key_name:str):
     df.to_excel(output_path, index=False)
     return rows
 
+def list_to_excel(data:list, output_path:str):
+    df = pd.DataFrame(data)
+    df = df.astype(str)
+    df.to_excel(output_path,index=False)
+    return df
+
 def openCumulsWebPages(codesDict:dict):
     first = True
     for _, id in codesDict.items():
-        print(f"Dossier id {id} ouverture page web cumuls")
+        logger.log(f"Dossier id {id} ouverture page web cumuls")
         url = f"https://app.openpaye.co/MyApp/{id}/RepriseDossiers/Edit?dosID={id}"
         if first:
             webbrowser.open(url,new=1)
@@ -351,20 +358,19 @@ def create_excel_file(data, output_file, sheet_name='Sheet1'):
         else:
             # Créer un nouveau fichier
             df.to_excel(output_file, sheet_name=f"1_{sheet_name}", index=False)
-        logger.printSuccess(f"Migration Log file : {output_file}, Feuille {sheet_name} Crées : {len(data)} Lignes ajoutées")
+        logger.success(f"Migration Log file : {output_file}, Feuille {sheet_name} Crées : {len(data)} Lignes ajoutées")
     except Exception as e:
-        logger.printErr(f"Erreur lors de la création du fichier Excel: {e}")
+        logger.error(f"Erreur lors de la création du fichier Excel: {e}")
 
-def migrationLog(createdItem, type, suffix_name):
+def migrationLog(domain,createdItem, type, prefix):
     _logFile = r'.\data\out\migration_log'
-    _logFile = f"{_logFile}\\export_log_{suffix_name}.xlsx"
+    _logFile = f"{_logFile}\\{domain}\\{prefix}_export_log.xlsx"
     create_excel_file(createdItem,_logFile,type)
 
 def clearList(items: list[str]) -> list[str]:
     # remove blanks 
     items = [item for item in items if item != '']
-
-    return list(dict.fromkeys(items))
+    return list(set(dict.fromkeys(items)))
 
 def valid(statusCode:int) -> bool:
     return (statusCode in [200,201])
@@ -402,10 +408,10 @@ def findSimilarText(target: str, text_list: list[str], threshold: float = 0.8) -
 def isSimilarText(text_a: str, text_b: str, threshold: float = 0.8) -> list[tuple[str, float]]:
     score = similarity_score(text_a, text_b)
     success =  score >= threshold
-    if success: 
-        print(f"A: {text_a}")
-        print(f"B: {text_b}")
-        logger.printSuccess(f"score: {score}")
+    # if success: 
+    #     logger.printLog(f"A: {text_a}")
+    #     logger.printLog(f"B: {text_b}")
+    #     logger.printSuccess(f"score: {score}")
     return success
 
 
@@ -417,3 +423,25 @@ def getPlaceholderMail(domain):
     if domain not in DomainMailMap.keys():
         raise Exception(f"add a placeholder if needed or \"{domain}\": None,")
     return DomainMailMap[domain]
+
+def validIban(iban):
+    res = re.match(r"[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{4}[0-9]{7}([a-zA-Z0-9]?){0,16}",string=iban)
+    return res != None
+
+def getContratID(numero,matricule,cum_dtDebContrat,cum_dtDebEmploi,dosMatrToContratNum,emp_detailsMap):
+    contratsSilae = emp_detailsMap[numero][matricule]
+    for i in range(len(contratsSilae)):
+        emp = contratsSilae[i]
+        emp_numContrat = emp["SEM_DSNNumeroContrat"] if emp["SEM_DSNNumeroContrat"] != "" else "vide" 
+        emp_dtDebEmploi = emp["SEM_DtDeb"]
+        emp_dtDebContrat = emp["SEM_DtDebContrat"]
+        if emp_dtDebEmploi == "": emp_dtDebEmploi = None
+        if emp_dtDebContrat == "": emp_dtDebContrat = None
+        try:
+            contrats = dosMatrToContratNum[numero][matricule][emp_numContrat]
+            for i, contrat in enumerate(contrats):
+                if emp_dtDebContrat == cum_dtDebContrat and emp_dtDebEmploi == cum_dtDebEmploi:
+                    return contrat["id"], emp_numContrat, i
+        except KeyError as e: 
+            logger.error(f"Contrat ID introuvable")
+            return None, emp_numContrat

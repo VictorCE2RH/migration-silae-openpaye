@@ -1,2 +1,12 @@
 LISTE TOTALE : 01TARPO 04KVSER 02DURAN 08RYTML 08KAITE 05CLEOP 05GHIDI 01GIYA 07TBAR 10OCCAM 10CORRE 10FAYIZ 01MARIS 05ACDEM 03DELPA 03SLRT 07FOURC 07ARCEN 13KGP 13LECOM 02DG4SA 02M22EM BBAINTER BDUMOULIN 01FRDEC 11YODA 02JSSF 03LAPAI
-04KVSER 02DURAN 08RYTML 08KAITE 05CLEOP 05GHIDI 01GIYA 07TBAR 10OCCAM 10CORRE 10FAYIZ 01MARIS 05ACDEM 03DELPA 03SLRT 07FOURC 07ARCEN 13KGP 13LECOM 02DG4SA 02M22EM BBAINTER BDUMOULIN 01FRDEC 11YODA 02JSSF 03LAPAI
+
+    Note : 
+        05ACDEM : MAtricule 000017 pas une cle SS valide
+
+ ERROR: Error https://api.openpaye.co/salaries?dossierId=39630 response : 400 - "IBAN Invalide"
+ ERROR: salaries Erreur lors de la création de {'banque': {'iban': 'CCMPERROSGUIREC', 'code_bic': 'CCMPXXXX', 'virement': True}, 'matricule_salarie': '00025', 'nbr_enfants_charge': 0, 'civilite': 1, 'nom': 'BLANCOU', 'prenom': 'JEAN-LUC', 'email': 'Jean-Luc.blancou@eu.joysonsafety.com', 'nom_naissance': 'BLANCOU', 'situation_familiale': '10', 'numero_ss_cle': '171019933304575', 'date_naissance': '04/01/1971', 'departement': '99', 'commune_naissance': 'TANANARIVE', 'pays_naissance': 'MG', 'nationalite': None, 'telephone': None, 'adresse': {'numero_voie': '  IN DEN EICHEN 55', 'complement': None, 'pays': 'DE', 'frontalier': True, 'code_postal': None, 'ville': 'LIEDERBACH 65835', 'code_insee': None}}
+ 
+ ERROR: Dossier 08RYTML - etab PARIS : donnée de banque vide iban  bic 
+
+supprimer: 
+01TARPO 04KVSER 08RYTML 05CLEOP 05GHIDI 01GIYA 07TBAR 10OCCAM 10CORRE 10FAYIZ 01MARIS 05ACDEM 03DELPA 03SLRT 07FOURC 07ARCEN 13KGP 13LECOM 02DG4SA 02M22EM BBAINTER BDUMOULIN 01FRDEC 11YODA 02JSSF 03LAPAI

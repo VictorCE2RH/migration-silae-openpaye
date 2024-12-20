@@ -1,4 +1,5 @@
 import pandas as pd
+import logger
 
 input_file = r'.\data\in\emplois_ccn_original.xlsx'
 output_file = r'.\data\in\emploi_ccn.xlsx'
@@ -23,19 +24,19 @@ def get_distinct_statuts_all_sheets(fichier):
             # Ajouter les statuts au set global
             tous_statuts.update(statuts_feuille)
             
-            print(f"Feuille '{sheet_name}' traitée avec succès")
+            logger.log(f"Feuille '{sheet_name}' traitée avec succès")
             
         except Exception as e:
-            print(f"Erreur lors du traitement de la feuille '{sheet_name}': {str(e)}")
+            logger.log(f"Erreur lors du traitement de la feuille '{sheet_name}': {str(e)}")
             continue
     
     # Convertir le set en liste triée
     statuts_distincts = sorted(tous_statuts)
     
     # Afficher les résultats
-    print("\nStatuts distincts trouvés dans toutes les feuilles :")
+    logger.log("\nStatuts distincts trouvés dans toutes les feuilles :")
     for statut in statuts_distincts:
-        print(f"- {statut}")
+        logger.log(f"- {statut}")
     
     return statuts_distincts
 
@@ -54,7 +55,7 @@ def process_excel_file(input_file, output_file):
             
             # Vérifier si l'IDCC extrait est valide (4 chiffres)
             if not sheet_idcc.isdigit() or len(sheet_idcc) != 4:
-                print(f"Feuille '{sheet_name}' ignorée : IDCC invalide")
+                logger.log(f"Feuille '{sheet_name}' ignorée : IDCC invalide")
                 continue
                 
             # Lire la feuille en ignorant les deux premières lignes
@@ -75,10 +76,10 @@ def process_excel_file(input_file, output_file):
             # Ajouter à notre liste
             all_sheets_data.append(selected_columns)
             
-            print(f"Feuille '{sheet_name}' traitée avec succès (IDCC: {sheet_idcc})")
+            logger.log(f"Feuille '{sheet_name}' traitée avec succès (IDCC: {sheet_idcc})")
             
         except Exception as e:
-            print(f"Erreur lors du traitement de la feuille '{sheet_name}': {str(e)}")
+            logger.log(f"Erreur lors du traitement de la feuille '{sheet_name}': {str(e)}")
             continue
     
     # Combiner tous les DataFrames
@@ -98,10 +99,10 @@ def process_excel_file(input_file, output_file):
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
             new_df.to_excel(writer, sheet_name='Résultat', index=False)
         
-        print(f"\nNouveau fichier Excel créé avec succès : '{output_file}'")
-        print(f"Nombre total de lignes : {len(new_df)}")
+        logger.log(f"\nNouveau fichier Excel créé avec succès : '{output_file}'")
+        logger.log(f"Nombre total de lignes : {len(new_df)}")
     else:
-        print("Aucune donnée n'a été trouvée dans les feuilles")
+        logger.log("Aucune donnée n'a été trouvée dans les feuilles")
 
 
 statuts = get_distinct_statuts_all_sheets(input_file)

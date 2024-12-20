@@ -5,3 +5,4 @@ data/out/**
 script.py
 .venv
 DSN.xml
+*.log

@@ -1,6 +1,7 @@
 from enum import Enum
 import pandas as pd
-
+import utils
+import logger
 
 # Enum des rôles définis
 class RoleOP(Enum):
@@ -48,12 +49,13 @@ role_mapping = {
 def associer_role(qualite_texte: str, mapping: dict[str, RoleOP] = role_mapping):
 
     qualite_texte = qualite_texte.strip().lower()
-
+    if qualite_texte == "" or utils.isSimilarText(qualite_texte,"autre",0.9):
+        return RoleOP.Autre
     # Recherche dans le dictionnaire avec un retour par défaut sur RoleOP.Autre
     for key in mapping:
-        if key in qualite_texte:
+        if utils.isSimilarText(key,qualite_texte,0.9):
             return mapping[key]
 
-    print(f"QUALITEE : AUCUNE CORRESPONDANCE, attribution du role AUTRE\n {qualite_texte} (clé={key}). ajoutez une correspondance si nécessaire dans role.py")
+    logger.log(f"QUALITEE : AUCUNE CORRESPONDANCE, attribution du role AUTRE\n {qualite_texte} (clé={key}). ajoutez une correspondance si nécessaire dans role.py")
     # Si aucune correspondance n'a été trouvée, renvoyer RoleOP.Autre
     return RoleOP.Autre

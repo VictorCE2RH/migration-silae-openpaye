@@ -1,6 +1,12 @@
 import pandas as pd
 from typing import List, Set
 
+import sys
+import os
+# Ajoute le dossier parent au PYTHONPATH
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import logger
+
 def pad_lists_to_equal_length(lists: List[List]) -> List[List]:
     """
     Égalise la longueur des listes en ajoutant des valeurs None.
@@ -76,7 +82,7 @@ def compare_excel_columns(file_path: str, col_a: str, col_b: str):
         }
         
     except Exception as e:
-        print(f"Une erreur s'est produite: {str(e)}")
+        logger.log(f"Une erreur s'est produite: {str(e)}")
         return None
 
 # Exemple d'utilisation
@@ -88,7 +94,7 @@ if __name__ == "__main__":
     results = compare_excel_columns(file_path, col_a, col_b)
     
     if results:
-        print(f"\nRésultats de la comparaison:")
-        print(f"Nombre de valeurs communes: {results['matching_count']}")
-        print(f"Nombre de valeurs uniquement dans {col_a}: {results['only_in_a_count']}")
-        print(f"\nLes résultats détaillés ont été sauvegardés dans: {results['output_file']}")
+        logger.log(f"\nRésultats de la comparaison:")
+        logger.log(f"Nombre de valeurs communes: {results['matching_count']}")
+        logger.log(f"Nombre de valeurs uniquement dans {col_a}: {results['only_in_a_count']}")
+        logger.log(f"\nLes résultats détaillés ont été sauvegardés dans: {results['output_file']}")
